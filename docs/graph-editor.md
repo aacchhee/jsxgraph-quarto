@@ -164,7 +164,8 @@ messages only when `event.source === window.parent`.
 A board in a hidden tab or collapsed block runs its code while the page loads,
 at a provisional pixel size, so a request is answered while it is hidden and an
 `ai.render` picture is drawn. A request that arrives before the iframe's `load`
-event waits for it (at most 3 s), so registrations made in a load handler count.
+event and finds no registration yet waits for it (at most 3 s), so a
+registration made in a load handler counts.
 
 ### Request
 

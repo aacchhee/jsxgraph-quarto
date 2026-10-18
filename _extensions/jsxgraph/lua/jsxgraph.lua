@@ -181,7 +181,14 @@ local function renderJsxgraph(globalOptions)
         -- BOARDID names the board's container everywhere in the code, not only
         -- inside initBoard(...) (e.g. document.getElementById(BOARDID)).
         -- A window property, not a declaration: page code may declare its own.
-        jsxgraph = 'window.BOARDID = "' .. id .. '";\n' .. jsxgraph
+        -- After a leading 'use strict' directive, which must stay first.
+        local prelude = 'window.BOARDID = "' .. id .. '";\n'
+        local directive = jsxgraph:match("^(%s*(['\"])use strict%2%s*;?[ \t]*\n?)(.*)$")
+        if directive then
+            jsxgraph = directive .. prelude .. jsxgraph:sub(#directive + 1)
+        else
+            jsxgraph = prelude .. jsxgraph
+        end
 
         local out = 'svg'
         if quarto.doc.is_format("html") then out = options.out end
@@ -678,18 +685,20 @@ board%s.reload = function() { window.location.reload(); };
       const view = board.quartoView, current = board.getBoundingBox();
       // A view set since the last refresh (by the page's code or the user's pan
       // or zoom) becomes the one to keep.
-      if (validBox(current) && !sameBox(current, view.last)) view.intended = current.slice();
+      const adopted = validBox(current) && !sameBox(current, view.last);
+      if (adopted) view.intended = current.slice();
       const changed = Math.abs((board.canvasWidth || 0) - width) > 1 || Math.abs((board.canvasHeight || 0) - height) > 1;
       // First real size after a hidden start: a board set up with origin and
       // units keeps them, as if it had started visible at this size
       // (resizeContainer would move the origin by half the size change).
-      const keepOrigin = view.provisional && view.units && board.origin && board.origin.scrCoords
+      // A box the code set meanwhile is kept instead (above).
+      const keepOrigin = view.provisional && view.units && !adopted && board.origin && board.origin.scrCoords
         ? [board.origin.scrCoords[1], board.origin.scrCoords[2] ] : null;
       if (changed) board.resizeContainer(width, height, true, true);
       if (view.provisional) {
         view.provisional = false;
         if (keepOrigin && typeof board.moveOrigin === 'function') board.moveOrigin(keepOrigin[0], keepOrigin[1]);
-        if (view.units) view.intended = board.getBoundingBox().slice();
+        if (view.units && !adopted) view.intended = board.getBoundingBox().slice();
       }
       if (view.intended && (changed || !validBox(current))) board.setBoundingBox(fit(view.intended, board, width, height), board.keepaspectratio);
       view.last = board.getBoundingBox();
