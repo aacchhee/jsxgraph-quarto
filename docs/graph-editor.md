@@ -161,9 +161,10 @@ Messages use `protocol: "jsxgraph-quarto-assessment"`, `version: 1`, and the
 block's `assessment_id` (or generated iframe ID). The sandboxed iframe accepts
 messages only when `event.source === window.parent`.
 
-A board in a hidden tab or collapsed block runs its code when it first becomes
-visible; a request starts it at once, at a provisional pixel size, so a
-request is always answered and an `ai.render` picture is drawn.
+A board in a hidden tab or collapsed block runs its code while the page loads,
+at a provisional pixel size, so a request is answered while it is hidden and an
+`ai.render` picture is drawn. A request that arrives before the iframe's `load`
+event waits for it (at most 3 s), so registrations made in a load handler count.
 
 ### Request
 

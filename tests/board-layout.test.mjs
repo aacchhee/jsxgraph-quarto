@@ -13,10 +13,12 @@ test('BOARDID is defined for the whole board code', () => {
   assert.match(lua, /jsxgraph = 'var BOARDID = "' \.\. id \.\. '";\\n' \.\. jsxgraph/);
 });
 
-test('board code is inert until the iframe has a size', () => {
-  assert.match(lua, /<script type="text\/plain" id="jsxgraph-board-code">%s<\/script>/);
-  assert.match(lua, /window\.innerWidth > 0 && window\.innerHeight > 0/);
-  assert.match(lua, /window\.JXGQuartoStart\(true\)/, 'an assessment request starts a hidden board');
+test('board code runs while the page is parsed, at a provisional size when hidden', () => {
+  assert.match(lua, /<script>%s<\/script>\n<\/body>/, 'board code is the last inline script, as upstream');
+  assert.doesNotMatch(lua, /jsxgraph-board-code/);
+  assert.match(lua, /if \(box && !\(window\.innerWidth > 0 && window\.innerHeight > 0\)\)/);
+  assert.match(lua, /const provisionalSize = \[%d, %d\];/);
+  assert.match(lua, /window\.addEventListener\('load', resolve, \{once: true\}\)/, 'a request waits for load handlers');
 });
 
 test('resizing keeps the container fluid and restores the intended view', () => {

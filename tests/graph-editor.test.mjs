@@ -127,7 +127,7 @@ test('graph editor creates, toggles, summarizes, and registers a graph', () => {
 
 test('Lua embeds the editor and handles assessment and layout messages', () => {
   assert.match(lua, /GRAPH_EDITOR_JS = ioRead/);
-  assert.match(lua, /jsxgraph, GRAPH_EDITOR_JS, assessment_bridge/);
+  assert.match(lua, /assessment_bridge, GRAPH_EDITOR_JS, jsxgraph/);
   assert.match(lua, /message\.type !== 'request'/);
   assert.match(lua, /message\.type === 'layout'/);
   assert.match(lua, /board\.resizeContainer\(width, height, true, true\)/);
