@@ -562,12 +562,27 @@ board%s.reload = function() { window.location.reload(); };
             if not GRAPH_EDITOR_JS then
                 GRAPH_EDITOR_JS = ioRead(joinPath(extension_dir, "graph-editor.js"))
             end
+            -- Pixel size for a board started while hidden (see the bridge).
+            local w, h = tonumber(options.width) or 500, tonumber(options.height) or 300
+            local provisional_width, provisional_height
+            if options.unit == "px" then
+                provisional_width, provisional_height = math.floor(w + 0.5), math.floor(h + 0.5)
+            else
+                provisional_width = 800
+                provisional_height = math.floor(800 * h / w + 0.5)
+            end
             local assessment_bridge = string.format([[
 (function () {
   'use strict';
   const protocol = 'jsxgraph-quarto-assessment';
   const version = 1;
   const assessmentId = %q;
+  const boardId = %q;
+  // A size for a board that must start while hidden (an assessment request):
+  // a hidden iframe lays nothing out, but JSXGraph reads a container's CSS
+  // pixel size then. The board gets its real size when it is shown.
+  const provisionalSize = [%d, %d];
+  let provisional = null;
   let registration = null;
 
   async function svgToPng(dataUri, board) {
@@ -606,6 +621,7 @@ board%s.reload = function() { window.location.reload(); };
   function sameBox(a, b) {
     return validBox(a) && validBox(b) && a.every((value, i) => Math.abs(value - b[i]) <= 1e-9 * Math.max(1, Math.abs(b[i])));
   }
+  const containerObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => scheduleBoardRefresh()) : null;
   function remember(board) {
     // With unitX/unitY (and originX/originY) JSXGraph ignores boundingbox, so
     // the view the board was created with is its current one.
@@ -613,7 +629,9 @@ board%s.reload = function() { window.location.reload(); };
     const initial = !(attr.unitx || attr.unity) && attr.boundingbox;
     board.quartoView = {intended: validBox(initial) ? initial.slice() : (validBox(current) ? current.slice() : null), last: current};
     // Follow the container itself too: board code may resize it (a side panel).
-    if (typeof ResizeObserver === 'function' && board.containerObj) new ResizeObserver(scheduleBoardRefresh).observe(board.containerObj);
+    // One observer for all containers: observing an element again is a no-op,
+    // so boards that are freed and created again do not add observers.
+    if (containerObserver && board.containerObj) containerObserver.observe(board.containerObj);
   }
   // The extension resizes the boards (below); JSXGraph's own resize observer
   // would adjust the view a second time. Board code can still enable it.
@@ -636,6 +654,12 @@ board%s.reload = function() { window.location.reload(); };
     return [cx - width / (2 * scale), cy + height / (2 * scale), cx + width / (2 * scale), cy - height / (2 * scale)];
   }
   function refreshBoards() {
+    // Shown at last: the container fills the iframe again.
+    if (provisional && window.innerWidth > 0 && window.innerHeight > 0) {
+      if (provisional.element.style.width === provisional.width) provisional.element.style.width = provisional.previous[0];
+      if (provisional.element.style.height === provisional.height) provisional.element.style.height = provisional.previous[1];
+      provisional = null;
+    }
     Object.values(JXG.boards || {}).forEach((board) => {
       const container = board.containerObj;
       if (!container || typeof board.resizeContainer !== 'function') return;
@@ -685,8 +709,9 @@ board%s.reload = function() { window.location.reload(); };
       return;
     }
     if (message.type !== 'request') return;
-    // An assessment request needs the board even while it is hidden.
-    if (window.JXGQuartoStart) window.JXGQuartoStart(true);
+    // An assessment request needs the board even while it is hidden; wait for
+    // its code, including scripts it wrote and its load handlers.
+    if (window.JXGQuartoStart) await window.JXGQuartoStart(true);
 
     const reply = {
       protocol,
@@ -724,17 +749,27 @@ board%s.reload = function() { window.location.reload(); };
 
   // The board code runs once the iframe has a size: a board created in a
   // hidden tab or collapsed block would start with a zero-size, invalid scale.
-  let started = false;
+  let started = false, ready = Promise.resolve();
   window.JXGQuartoStart = function (force) {
-    if (started || !(force || (window.innerWidth > 0 && window.innerHeight > 0))) return;
+    const visible = window.innerWidth > 0 && window.innerHeight > 0;
+    if (started || !(force || visible)) return ready;
     const code = document.getElementById('jsxgraph-board-code');
-    if (!code) return;
+    if (!code) return ready;
     started = true;
+    const box = document.getElementById(boardId);
+    if (!visible && box) {
+      const width = provisionalSize[0] + 'px', height = provisionalSize[1] + 'px';
+      provisional = {element: box, width, height, previous: [box.style.width, box.style.height]};
+      box.style.width = width;
+      box.style.height = height;
+    }
     // Started after the page has loaded (a hidden board, or an assessment
     // request): listeners for events that have already fired are called once
-    // after the code, and document.write appends instead of replacing the page.
+    // after the code, and what the code writes with document.write is added
+    // after it, at once, with its scripts run in order before those listeners.
     const late = document.readyState !== 'loading';
     const replay = [], undo = [];
+    let written = '';
     if (late) {
       const fired = (target, type) => type === 'DOMContentLoaded' ||
         (type === 'load' && target === window && document.readyState === 'complete');
@@ -745,9 +780,8 @@ board%s.reload = function() { window.location.reload(); };
         };
         undo.push(() => { delete target.addEventListener; });
       });
-      document.write = document.writeln = function () {
-        document.body.insertAdjacentHTML('beforeend', Array.prototype.join.call(arguments, ''));
-      };
+      document.write = function () { written += Array.prototype.join.call(arguments, ''); };
+      document.writeln = function () { written += Array.prototype.join.call(arguments, '') + '\n'; };
       undo.push(() => { delete document.write; delete document.writeln; });
     }
     const onload = window.onload;
@@ -758,12 +792,30 @@ board%s.reload = function() { window.location.reload(); };
     if (late && window.onload !== onload && typeof window.onload === 'function' && document.readyState === 'complete') {
       replay.push([window, 'load', window.onload]);
     }
-    replay.forEach(([target, type, listener]) => {
-      const event = new Event(type);
-      try { typeof listener === 'function' ? listener.call(target, event) : listener.handleEvent(event); }
-      catch (error) { setTimeout(() => { throw error; }); }
-    });
-    scheduleBoardRefresh();
+    const loading = [];
+    if (written) {
+      // createContextualFragment keeps scripts runnable (innerHTML does not).
+      const fragment = document.createRange().createContextualFragment(written);
+      fragment.querySelectorAll('script[src]').forEach((external) => {
+        external.async = false;
+        loading.push(new Promise((resolve) => {
+          external.addEventListener('load', resolve);
+          external.addEventListener('error', resolve);
+        }));
+      });
+      document.body.appendChild(fragment);
+    }
+    const finish = () => {
+      replay.forEach(([target, type, listener]) => {
+        const event = new Event(type);
+        try { typeof listener === 'function' ? listener.call(target, event) : listener.handleEvent(event); }
+        catch (error) { setTimeout(() => { throw error; }); }
+      });
+      scheduleBoardRefresh();
+    };
+    if (loading.length) ready = Promise.all(loading).then(finish);
+    else finish();
+    return ready;
   };
   const startWhenVisible = () => window.JXGQuartoStart(false);
   window.addEventListener('resize', startWhenVisible);
@@ -773,7 +825,7 @@ board%s.reload = function() { window.location.reload(); };
   startWhenVisible();
   document.addEventListener('DOMContentLoaded', startWhenVisible);
 })();
-]], assessment_id)
+]], assessment_id, id, provisional_width, provisional_height)
 
             local icontent = string.format([[
 <!DOCTYPE html>

@@ -224,7 +224,11 @@ Check out a working example: [example.qmd](example.qmd).
   in `initBoard(BOARDID, ...)`; for example `document.getElementById(BOARDID)`.
 - **Hidden boards** (in a Quarto tab that is not shown, or a collapsed callout)
   run their code when they first become visible, so they never start with a
-  zero size. An assessment request starts a hidden board at once.
+  zero size. Code that waits for `DOMContentLoaded` or `load` still runs, and
+  what it writes with `document.write` (including scripts) is added after it.
+  An assessment request starts a hidden board at once, at a provisional size
+  (the block's `width`/`height` in pixels, otherwise 800 px wide), so its
+  picture for AI feedback is drawn; the board takes its real size when shown.
 - **Resizing** (window, tab, mobile width) follows the iframe and shows the
   `boundingbox` the board was created with; a view the user has panned or
   zoomed to is kept. Boards need no own resize code.

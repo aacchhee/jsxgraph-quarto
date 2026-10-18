@@ -162,7 +162,8 @@ block's `assessment_id` (or generated iframe ID). The sandboxed iframe accepts
 messages only when `event.source === window.parent`.
 
 A board in a hidden tab or collapsed block runs its code when it first becomes
-visible; a request starts it at once, so a request is always answered.
+visible; a request starts it at once, at a provisional pixel size, so a
+request is always answered and an `ai.render` picture is drawn.
 
 ### Request
 
