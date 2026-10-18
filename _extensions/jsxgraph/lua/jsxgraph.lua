@@ -597,8 +597,8 @@ board%s.reload = function() { window.location.reload(); };
 
   // The board fills the iframe. Hidden tabs and collapsed blocks give the
   // iframe no size; resizing follows the iframe, without fixing the
-  // container's pixel size, and restores the intended view: the bounding box
-  // the board was created with, unless the user has since panned or zoomed.
+  // container's pixel size, and shows the intended view: the bounding box the
+  // board was created with, or the one the page's code or the user set later.
   function validBox(box) {
     return Array.isArray(box) && box.length === 4 && box.every(Number.isFinite) &&
       box[2] > box[0] && box[1] > box[3];
@@ -606,25 +606,35 @@ board%s.reload = function() { window.location.reload(); };
   function sameBox(a, b) {
     return validBox(a) && validBox(b) && a.every((value, i) => Math.abs(value - b[i]) <= 1e-9 * Math.max(1, Math.abs(b[i])));
   }
+  function remember(board) {
+    const initial = board.attr && board.attr.boundingbox, current = board.getBoundingBox();
+    board.quartoView = {intended: validBox(initial) ? initial.slice() : (validBox(current) ? current.slice() : null), last: current};
+  }
+  // The extension resizes the boards (below); JSXGraph's own resize observer
+  // would adjust the view a second time. Board code can still enable it.
+  if (JXG.Options && JXG.Options.board && JXG.Options.board.resize) JXG.Options.board.resize.enabled = false;
+  // Record each board's view as created, before any later change.
+  if (JXG.JSXGraph && typeof JXG.JSXGraph.initBoard === 'function') {
+    const initBoard = JXG.JSXGraph.initBoard;
+    JXG.JSXGraph.initBoard = function () {
+      const board = initBoard.apply(this, arguments);
+      try { remember(board); } catch (error) { /* keep the board usable */ }
+      return board;
+    };
+  }
   function refreshBoards() {
     const width = window.innerWidth, height = window.innerHeight;
     if (!(width > 0 && height > 0)) return;
     Object.values(JXG.boards || {}).forEach((board) => {
       if (!board.containerObj || typeof board.resizeContainer !== 'function') return;
-      if (!board.quartoView) {
-        const initial = board.attr && board.attr.boundingbox;
-        board.quartoView = {intended: validBox(initial) ? initial.slice() : null, last: null};
-      }
+      if (!board.quartoView) remember(board);
       const view = board.quartoView, current = board.getBoundingBox();
+      // A view set since the last refresh (by the page's code or the user's pan
+      // or zoom) becomes the one to keep.
+      if (validBox(current) && !sameBox(current, view.last)) view.intended = current.slice();
       const changed = Math.abs((board.canvasWidth || 0) - width) > 1 || Math.abs((board.canvasHeight || 0) - height) > 1;
       if (changed) board.resizeContainer(width, height, true, true);
-      // Keep a view the user chose; otherwise (or if the board started without a
-      // size and has no valid view) show the intended bounding box.
-      const userView = validBox(current) && view.last && !sameBox(current, view.last);
-      const target = userView ? current : (view.intended || (validBox(current) ? current : null));
-      if (target && (changed || !validBox(current) || !sameBox(current, view.last || current))) {
-        board.setBoundingBox(target.slice(), board.keepaspectratio);
-      }
+      if (view.intended && (changed || !validBox(current))) board.setBoundingBox(view.intended.slice(), board.keepaspectratio);
       view.last = board.getBoundingBox();
       if (typeof board.fullUpdate === 'function') board.fullUpdate();
       else if (typeof board.update === 'function') board.update();

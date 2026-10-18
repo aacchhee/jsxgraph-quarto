@@ -22,5 +22,7 @@ test('board code is inert until the iframe has a size', () => {
 test('resizing keeps the container fluid and restores the intended view', () => {
   assert.match(lua, /board\.resizeContainer\(width, height, true, true\)/);
   assert.doesNotMatch(lua, /board\.resizeContainer\(width, height\);/);
-  assert.match(lua, /board\.setBoundingBox\(target\.slice\(\), board\.keepaspectratio\)/);
+  assert.match(lua, /board\.setBoundingBox\(view\.intended\.slice\(\), board\.keepaspectratio\)/);
+  assert.match(lua, /JXG\.JSXGraph\.initBoard = function/, 'views are recorded when boards are created');
+  assert.match(lua, /JXG\.Options\.board\.resize\.enabled = false/, 'one resizer: the extension');
 });
