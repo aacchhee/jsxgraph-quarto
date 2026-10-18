@@ -729,8 +729,10 @@ function Pandoc(doc)
         echo = false,
         unit = 'px',
         reload = false,
-        src_jxg = 'https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraphcore.js',
-        src_css = 'https://cdn.jsdelivr.net/npm/jsxgraph/distrib/jsxgraph.css',
+        -- JSXGraph 1.x: any later 1.x release, but no unannounced switch to a
+        -- new major version on already published pages.
+        src_jxg = 'https://cdn.jsdelivr.net/npm/jsxgraph@1/distrib/jsxgraphcore.js',
+        src_css = 'https://cdn.jsdelivr.net/npm/jsxgraph@1/distrib/jsxgraph.css',
         src_mjx = 'https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-svg.js'
     }
 

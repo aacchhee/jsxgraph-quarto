@@ -103,9 +103,9 @@ filters:
 | `iframe_id`    | Adds `id="frame_id"` to the `<iframe>` containing the JSXGraph illustration.   | —        |
 | `out`          | Static export with `svg`; interactive html export with `js`.                   | `js`     |
 | `reload`       | Shows a reload button.                                                         | `false`  |
-| `src_css`      | URL or local path to `jsxgraph.css`.                                          | jsDelivr |
-| `src_jxg`      | URL or local path to `jsxgraphcore.js`.                                       | jsDelivr |
-| `src_mjx`      | Path to the MathJax file.                                                      | —        |
+| `src_css`      | URL or local path to `jsxgraph.css`.                                          | jsDelivr, latest JSXGraph 1.x |
+| `src_jxg`      | URL or local path to `jsxgraphcore.js`.                                       | jsDelivr, latest JSXGraph 1.x |
+| `src_mjx`      | Path to the MathJax file.                                                      | jsDelivr, latest MathJax 4.x |
 | `style`        | Custom CSS (e.g. `border: 5px solid red; border-radius: 10px;`).               | `none`   |
 | `textwidth`    | Absolute textwidth  (e.g. `15.5cm`, `5in`).                                    | `20cm`   |
 | `unit`         | Unit for `width`and `height` (e.g. `px`, `em`, `rem`, `cm`, `mm`, `in`, `pt`). | `px`     |
@@ -202,7 +202,8 @@ options, and host integration contract are documented in
 ## Asset loading
 
 Interactive output uses the jsDelivr JSXGraph JavaScript and CSS URLs by
-default. A project can set `src_jxg` and `src_css` to other HTTP(S) URLs, which
+default, from the latest JSXGraph 1.x release (a new major version is never
+picked up silently). A project can set `src_jxg` and `src_css` to other HTTP(S) URLs, which
 are preserved as supplied, or to local paths, which are embedded as data URLs.
 The bundled resources therefore remain available for self-contained or offline
 projects when selected explicitly.
