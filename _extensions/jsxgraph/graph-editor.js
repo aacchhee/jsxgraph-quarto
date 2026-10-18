@@ -369,7 +369,9 @@
       if (!(width > 0 && height > 0) || typeof board.resizeContainer !== 'function') return false;
       if (Math.abs((board.canvasWidth || 0) - width) > 1 ||
           Math.abs((board.canvasHeight || 0) - height) > 1) {
-        board.resizeContainer(width, height);
+        // Keep the container fluid (CSS size): fixing it in px would stop it
+        // following the iframe on narrow screens.
+        board.resizeContainer(width, height, true);
         if (typeof board.fullUpdate === 'function') board.fullUpdate();
       }
       return true;

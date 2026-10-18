@@ -607,8 +607,13 @@ board%s.reload = function() { window.location.reload(); };
     return validBox(a) && validBox(b) && a.every((value, i) => Math.abs(value - b[i]) <= 1e-9 * Math.max(1, Math.abs(b[i])));
   }
   function remember(board) {
-    const initial = board.attr && board.attr.boundingbox, current = board.getBoundingBox();
+    // With unitX/unitY (and originX/originY) JSXGraph ignores boundingbox, so
+    // the view the board was created with is its current one.
+    const attr = board.attr || {}, current = board.getBoundingBox();
+    const initial = !(attr.unitx || attr.unity) && attr.boundingbox;
     board.quartoView = {intended: validBox(initial) ? initial.slice() : (validBox(current) ? current.slice() : null), last: current};
+    // Follow the container itself too: board code may resize it (a side panel).
+    if (typeof ResizeObserver === 'function' && board.containerObj) new ResizeObserver(scheduleBoardRefresh).observe(board.containerObj);
   }
   // The extension resizes the boards (below); JSXGraph's own resize observer
   // would adjust the view a second time. Board code can still enable it.
@@ -725,16 +730,48 @@ board%s.reload = function() { window.location.reload(); };
     const code = document.getElementById('jsxgraph-board-code');
     if (!code) return;
     started = true;
+    // Started after the page has loaded (a hidden board, or an assessment
+    // request): listeners for events that have already fired are called once
+    // after the code, and document.write appends instead of replacing the page.
+    const late = document.readyState !== 'loading';
+    const replay = [], undo = [];
+    if (late) {
+      const fired = (target, type) => type === 'DOMContentLoaded' ||
+        (type === 'load' && target === window && document.readyState === 'complete');
+      [window, document].forEach((target) => {
+        target.addEventListener = function (type, listener, options) {
+          if (fired(target, type) && listener) { replay.push([target, type, listener]); return; }
+          return EventTarget.prototype.addEventListener.call(this, type, listener, options);
+        };
+        undo.push(() => { delete target.addEventListener; });
+      });
+      document.write = document.writeln = function () {
+        document.body.insertAdjacentHTML('beforeend', Array.prototype.join.call(arguments, ''));
+      };
+      undo.push(() => { delete document.write; delete document.writeln; });
+    }
+    const onload = window.onload;
     const script = document.createElement('script');
     script.textContent = code.textContent;
-    document.body.appendChild(script);
+    try { document.body.appendChild(script); }
+    finally { undo.forEach((restore) => restore()); }
+    if (late && window.onload !== onload && typeof window.onload === 'function' && document.readyState === 'complete') {
+      replay.push([window, 'load', window.onload]);
+    }
+    replay.forEach(([target, type, listener]) => {
+      const event = new Event(type);
+      try { typeof listener === 'function' ? listener.call(target, event) : listener.handleEvent(event); }
+      catch (error) { setTimeout(() => { throw error; }); }
+    });
     scheduleBoardRefresh();
   };
   const startWhenVisible = () => window.JXGQuartoStart(false);
   window.addEventListener('resize', startWhenVisible);
   if (typeof ResizeObserver === 'function') new ResizeObserver(startWhenVisible).observe(document.documentElement);
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startWhenVisible);
-  else startWhenVisible();
+  // A board that is visible while the page is parsed runs at once, inline,
+  // as before (its code may still use document.write or wait for load).
+  startWhenVisible();
+  document.addEventListener('DOMContentLoaded', startWhenVisible);
 })();
 ]], assessment_id)
 
