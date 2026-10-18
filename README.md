@@ -220,6 +220,14 @@ Check out a working example: [example.qmd](example.qmd).
 - **Interactive export** works for `html` and `revealjs`.  
 - Use `echo=true` to display the JSXGraph source code below the board.  
 - Customize layout via `width`, `height`, `style`, and `class`.
+- `BOARDID` is the id of the board's container everywhere in the code, not only
+  in `initBoard(BOARDID, ...)`; for example `document.getElementById(BOARDID)`.
+- **Hidden boards** (in a Quarto tab that is not shown, or a collapsed callout)
+  run their code when they first become visible, so they never start with a
+  zero size. An assessment request starts a hidden board at once.
+- **Resizing** (window, tab, mobile width) follows the iframe and shows the
+  `boundingbox` the board was created with; a view the user has panned or
+  zoomed to is kept. Boards need no own resize code.
 
 ---
 

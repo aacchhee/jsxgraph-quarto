@@ -178,6 +178,9 @@ local function renderJsxgraph(globalOptions)
         local jsxgraph = content.text
         jsxgraph = jsxgraph:gsub("initBoard%(%s*BOARDID%s*,", 'initBoard("jxg_box",')
         jsxgraph = jsxgraph:gsub([[initBoard%s*%(%s*(['"])[^'"]*%1%s*,]], 'initBoard("' .. id .. '",')
+        -- BOARDID names the board's container everywhere in the code, not only
+        -- inside initBoard(...) (e.g. document.getElementById(BOARDID)).
+        jsxgraph = 'var BOARDID = "' .. id .. '";\n' .. jsxgraph
 
         local out = 'svg'
         if quarto.doc.is_format("html") then out = options.out end
@@ -592,18 +595,37 @@ board%s.reload = function() { window.location.reload(); };
     return boards.length ? boards[0] : null;
   }
 
+  // The board fills the iframe. Hidden tabs and collapsed blocks give the
+  // iframe no size; resizing follows the iframe, without fixing the
+  // container's pixel size, and restores the intended view: the bounding box
+  // the board was created with, unless the user has since panned or zoomed.
+  function validBox(box) {
+    return Array.isArray(box) && box.length === 4 && box.every(Number.isFinite) &&
+      box[2] > box[0] && box[1] > box[3];
+  }
+  function sameBox(a, b) {
+    return validBox(a) && validBox(b) && a.every((value, i) => Math.abs(value - b[i]) <= 1e-9 * Math.max(1, Math.abs(b[i])));
+  }
   function refreshBoards() {
+    const width = window.innerWidth, height = window.innerHeight;
+    if (!(width > 0 && height > 0)) return;
     Object.values(JXG.boards || {}).forEach((board) => {
-      const container = board.containerObj;
-      if (!container) return;
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-      if (!(width > 0 && height > 0)) return;
-      if (typeof board.resizeContainer === 'function' &&
-          (Math.abs((board.canvasWidth || 0) - width) > 1 ||
-           Math.abs((board.canvasHeight || 0) - height) > 1)) {
-        board.resizeContainer(width, height);
+      if (!board.containerObj || typeof board.resizeContainer !== 'function') return;
+      if (!board.quartoView) {
+        const initial = board.attr && board.attr.boundingbox;
+        board.quartoView = {intended: validBox(initial) ? initial.slice() : null, last: null};
       }
+      const view = board.quartoView, current = board.getBoundingBox();
+      const changed = Math.abs((board.canvasWidth || 0) - width) > 1 || Math.abs((board.canvasHeight || 0) - height) > 1;
+      if (changed) board.resizeContainer(width, height, true, true);
+      // Keep a view the user chose; otherwise (or if the board started without a
+      // size and has no valid view) show the intended bounding box.
+      const userView = validBox(current) && view.last && !sameBox(current, view.last);
+      const target = userView ? current : (view.intended || (validBox(current) ? current : null));
+      if (target && (changed || !validBox(current) || !sameBox(current, view.last || current))) {
+        board.setBoundingBox(target.slice(), board.keepaspectratio);
+      }
+      view.last = board.getBoundingBox();
       if (typeof board.fullUpdate === 'function') board.fullUpdate();
       else if (typeof board.update === 'function') board.update();
     });
@@ -637,6 +659,8 @@ board%s.reload = function() { window.location.reload(); };
       return;
     }
     if (message.type !== 'request') return;
+    // An assessment request needs the board even while it is hidden.
+    if (window.JXGQuartoStart) window.JXGQuartoStart(true);
 
     const reply = {
       protocol,
@@ -670,6 +694,26 @@ board%s.reload = function() { window.location.reload(); };
     window.parent.postMessage(reply, '*');
   });
   window.addEventListener('resize', scheduleBoardRefresh);
+  if (typeof ResizeObserver === 'function') new ResizeObserver(scheduleBoardRefresh).observe(document.documentElement);
+
+  // The board code runs once the iframe has a size: a board created in a
+  // hidden tab or collapsed block would start with a zero-size, invalid scale.
+  let started = false;
+  window.JXGQuartoStart = function (force) {
+    if (started || !(force || (window.innerWidth > 0 && window.innerHeight > 0))) return;
+    const code = document.getElementById('jsxgraph-board-code');
+    if (!code) return;
+    started = true;
+    const script = document.createElement('script');
+    script.textContent = code.textContent;
+    document.body.appendChild(script);
+    scheduleBoardRefresh();
+  };
+  const startWhenVisible = () => window.JXGQuartoStart(false);
+  window.addEventListener('resize', startWhenVisible);
+  if (typeof ResizeObserver === 'function') new ResizeObserver(startWhenVisible).observe(document.documentElement);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startWhenVisible);
+  else startWhenVisible();
 })();
 ]], assessment_id)
 
@@ -685,11 +729,11 @@ board%s.reload = function() { window.location.reload(); };
 </head>
 <body>
 <div id="%s" class="jxgbox" style="width:100%%;height:100%%;display:block;object-fit:fill;box-sizing:border-box;"></div>
-<script>%s</script>
+<script type="text/plain" id="jsxgraph-board-code">%s</script>
 <script>%s</script>
 <script>%s</script>
 </body>
-</html>]], options.src_mjx, options.src_jxg, options.src_css, id, assessment_bridge, GRAPH_EDITOR_JS, jsxgraph)
+</html>]], options.src_mjx, options.src_jxg, options.src_css, id, jsxgraph, GRAPH_EDITOR_JS, assessment_bridge)
 
             local jsx_b64 = 'data:text/html;base64,' .. quarto.base64.encode(icontent)
             local iframe = '<iframe src="'..jsx_b64..'" class="'..options.class..'" name="iframe'..id..'"'
