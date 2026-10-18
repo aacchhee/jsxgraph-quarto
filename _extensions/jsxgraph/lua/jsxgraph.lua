@@ -622,11 +622,22 @@ board%s.reload = function() { window.location.reload(); };
       return board;
     };
   }
+  // With keepaspectratio the whole intended box stays visible: one scale for
+  // both directions, centred (JSXGraph's setBoundingBox may crop instead).
+  function fit(box, board, width, height) {
+    if (!board.keepaspectratio) return box.slice();
+    const scale = Math.min(width / (box[2] - box[0]), height / (box[1] - box[3]));
+    const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
+    return [cx - width / (2 * scale), cy + height / (2 * scale), cx + width / (2 * scale), cy - height / (2 * scale)];
+  }
   function refreshBoards() {
-    const width = window.innerWidth, height = window.innerHeight;
-    if (!(width > 0 && height > 0)) return;
     Object.values(JXG.boards || {}).forEach((board) => {
-      if (!board.containerObj || typeof board.resizeContainer !== 'function') return;
+      const container = board.containerObj;
+      if (!container || typeof board.resizeContainer !== 'function') return;
+      // The container keeps its CSS size (100%% of the iframe unless the board
+      // code lays it out otherwise), so its size is the board's size.
+      const width = container.clientWidth, height = container.clientHeight;
+      if (!(width > 0 && height > 0)) return;
       if (!board.quartoView) remember(board);
       const view = board.quartoView, current = board.getBoundingBox();
       // A view set since the last refresh (by the page's code or the user's pan
@@ -634,7 +645,7 @@ board%s.reload = function() { window.location.reload(); };
       if (validBox(current) && !sameBox(current, view.last)) view.intended = current.slice();
       const changed = Math.abs((board.canvasWidth || 0) - width) > 1 || Math.abs((board.canvasHeight || 0) - height) > 1;
       if (changed) board.resizeContainer(width, height, true, true);
-      if (view.intended && (changed || !validBox(current))) board.setBoundingBox(view.intended.slice(), board.keepaspectratio);
+      if (view.intended && (changed || !validBox(current))) board.setBoundingBox(fit(view.intended, board, width, height), board.keepaspectratio);
       view.last = board.getBoundingBox();
       if (typeof board.fullUpdate === 'function') board.fullUpdate();
       else if (typeof board.update === 'function') board.update();
