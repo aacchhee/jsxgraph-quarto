@@ -10,7 +10,7 @@ import test from 'node:test';
 const lua = await readFile(new URL('../_extensions/jsxgraph/lua/jsxgraph.lua', import.meta.url), 'utf8');
 
 test('BOARDID is defined for the whole board code', () => {
-  assert.match(lua, /jsxgraph = 'var BOARDID = "' \.\. id \.\. '";\\n' \.\. jsxgraph/);
+  assert.match(lua, /jsxgraph = 'window.BOARDID = "' \.\. id \.\. '";\\n' \.\. jsxgraph/);
 });
 
 test('board code runs while the page is parsed, at a provisional size when hidden', () => {

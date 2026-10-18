@@ -180,7 +180,8 @@ local function renderJsxgraph(globalOptions)
         jsxgraph = jsxgraph:gsub([[initBoard%s*%(%s*(['"])[^'"]*%1%s*,]], 'initBoard("' .. id .. '",')
         -- BOARDID names the board's container everywhere in the code, not only
         -- inside initBoard(...) (e.g. document.getElementById(BOARDID)).
-        jsxgraph = 'var BOARDID = "' .. id .. '";\n' .. jsxgraph
+        -- A window property, not a declaration: page code may declare its own.
+        jsxgraph = 'window.BOARDID = "' .. id .. '";\n' .. jsxgraph
 
         local out = 'svg'
         if quarto.doc.is_format("html") then out = options.out end
@@ -656,8 +657,12 @@ board%s.reload = function() { window.location.reload(); };
     return [cx - width / (2 * scale), cy + height / (2 * scale), cx + width / (2 * scale), cy - height / (2 * scale)];
   }
   function refreshBoards() {
+    const visible = window.innerWidth > 0 && window.innerHeight > 0;
+    // Still hidden after a provisional start: leave the boards as created (a
+    // layout message may arrive before the iframe is shown).
+    if (provisional && !visible) return;
     // Shown at last: the container fills the iframe again.
-    if (provisional && window.innerWidth > 0 && window.innerHeight > 0) {
+    if (provisional) {
       if (provisional.element.style.width === provisional.width) provisional.element.style.width = provisional.previous[0];
       if (provisional.element.style.height === provisional.height) provisional.element.style.height = provisional.previous[1];
       provisional = null;
@@ -675,11 +680,15 @@ board%s.reload = function() { window.location.reload(); };
       // or zoom) becomes the one to keep.
       if (validBox(current) && !sameBox(current, view.last)) view.intended = current.slice();
       const changed = Math.abs((board.canvasWidth || 0) - width) > 1 || Math.abs((board.canvasHeight || 0) - height) > 1;
+      // First real size after a hidden start: a board set up with origin and
+      // units keeps them, as if it had started visible at this size
+      // (resizeContainer would move the origin by half the size change).
+      const keepOrigin = view.provisional && view.units && board.origin && board.origin.scrCoords
+        ? [board.origin.scrCoords[1], board.origin.scrCoords[2] ] : null;
       if (changed) board.resizeContainer(width, height, true, true);
       if (view.provisional) {
-        // First real size after a hidden start: a board set up with origin and
-        // units keeps them, as if it had started visible at this size.
         view.provisional = false;
+        if (keepOrigin && typeof board.moveOrigin === 'function') board.moveOrigin(keepOrigin[0], keepOrigin[1]);
         if (view.units) view.intended = board.getBoundingBox().slice();
       }
       if (view.intended && (changed || !validBox(current))) board.setBoundingBox(fit(view.intended, board, width, height), board.keepaspectratio);
@@ -719,7 +728,7 @@ board%s.reload = function() { window.location.reload(); };
     if (message.type !== 'request') return;
     // Board code may register in a load handler: wait for the page's load
     // event (MathJax may still be loading), at most a few seconds.
-    if (document.readyState !== 'complete') {
+    if (!registration && document.readyState !== 'complete') {
       await new Promise((resolve) => {
         window.addEventListener('load', resolve, {once: true});
         setTimeout(resolve, 3000);
