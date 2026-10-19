@@ -604,9 +604,55 @@ board%s.reload = function() { window.location.reload(); };
   }
 
   // JSXGraph's own ResizeObserver resizes each board with its container (a
-  // tab or collapsed block shown, a narrower window), without fixing the
-  // container's CSS size.
+  // tab or collapsed block shown, a narrower window). Two gaps remain:
   //
+  // 1. A board created while the iframe is hidden has no size, so JSXGraph
+  //    cannot set its view yet: when shown, a board set up with unitX/unitY
+  //    and originX/originY gets infinite units, a keepaspectratio board a view
+  //    other than the one it gets when created visible, and a view the code
+  //    set meanwhile is lost. Such a board keeps the view its code asks for
+  //    and gets it at its first real size, as if created visible at that size.
+  function fit(box, width, height) {  // as initBoard with keepaspectratio
+    const scale = Math.min(width / (box[2] - box[0]), height / (box[1] - box[3]));
+    const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
+    return [cx - width / (2 * scale), cy + height / (2 * scale), cx + width / (2 * scale), cy - height / (2 * scale)];
+  }
+  function startWhenShown(board) {
+    const attr = board.attr;
+    let view = attr.unitx || attr.unity ? null : [attr.boundingbox.slice(), !!board.keepaspectratio];
+    const origin = board.origin.scrCoords.slice(1);
+    board.setBoundingBox = function (box, keep) {
+      if (Array.isArray(box) && box.every(Number.isFinite)) view = [box.slice(), !!keep];
+      return JXG.Board.prototype.setBoundingBox.apply(this, arguments);
+    };
+    board.updateContainerDims = function (width, height) {
+      const w = width === undefined ? this.containerObj.clientWidth : width;
+      const h = height === undefined ? this.containerObj.clientHeight : height;
+      if (!(w > 0 && h > 0)) return this;
+      delete this.setBoundingBox;
+      delete this.updateContainerDims;
+      this.resizeContainer(w, h, true, true);
+      if (view) {
+        this.setBoundingBox(view[1] ? fit(view[0], w, h) : view[0], false);
+        this.keepaspectratio = view[1];
+      } else {
+        this.moveOrigin(origin[0], origin[1]);
+      }
+      this._prevDim = {w: w, h: h};
+      return this;
+    };
+  }
+  if (JXG.JSXGraph && typeof JXG.JSXGraph.initBoard === 'function') {
+    const initBoard = JXG.JSXGraph.initBoard;
+    JXG.JSXGraph.initBoard = function () {
+      const board = initBoard.apply(this, arguments);
+      try {
+        if (!(board.canvasWidth > 0 && board.canvasHeight > 0) && board.origin) startWhenShown(board);
+      } catch (error) { /* keep the board usable */ }
+      return board;
+    };
+  }
+
   // 2. Since JSXGraph 1.9.2 the observer applies the first size reported
   //    within its 10 ms throttle and drops the later ones. When Chrome shows
   //    a hidden data: iframe it reports 0x0 and then the real size, so the
