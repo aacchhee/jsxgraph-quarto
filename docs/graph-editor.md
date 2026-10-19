@@ -162,8 +162,8 @@ block's `assessment_id` (or generated iframe ID). The sandboxed iframe accepts
 messages only when `event.source === window.parent`.
 
 A board in a hidden tab or collapsed block runs its code while the page loads,
-at a provisional pixel size, so a request is answered while it is hidden and an
-`ai.render` picture is drawn. A request that arrives before the iframe's `load`
+so a request is answered while it is hidden. A board that has never been shown
+has no size yet, so its `ai.render` picture is empty. A request that arrives before the iframe's `load`
 event and finds no registration yet waits for it (at most 3 s), so a
 registration made in a load handler counts.
 
@@ -231,9 +231,10 @@ A parent that reveals, expands, or resizes an iframe should send:
 }
 ```
 
-The iframe immediately refreshes every JSXGraph board, then repeats the refresh
-across animation frames. This is important when the iframe was initially laid
-out in a collapsed container. It does not produce a response message.
+Shortly afterwards, the iframe makes every JSXGraph board re-read its
+container's size, as it does on its own `resize` event. JSXGraph's resize
+observer normally handles this already; the message is a fallback for hosts
+that reveal or resize the iframe. It does not produce a response message.
 
 ## Host responsibilities
 

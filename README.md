@@ -222,17 +222,22 @@ Check out a working example: [example.qmd](example.qmd).
 - Customize layout via `width`, `height`, `style`, and `class`.
 - `BOARDID` is the id of the board's container everywhere in the code, not only
   in `initBoard(BOARDID, ...)`; for example `document.getElementById(BOARDID)`.
-- **Hidden boards** (in a Quarto tab that is not shown, or a collapsed callout)
-  run their code while the page loads, like any other board, so
-  `DOMContentLoaded`, `load` and `document.write` behave as always. A hidden
-  iframe has no size, so the board starts at a provisional size (the block's
-  `width`/`height` in pixels, otherwise 800 px wide) instead of a zero-size,
-  invalid one, and takes its real size and intended view when shown; a board
-  set up with `unitX`/`unitY` keeps its units. An assessment request is
-  answered while the board is hidden, with a drawn picture.
-- **Resizing** (window, tab, mobile width) follows the iframe and shows the
-  `boundingbox` the board was created with; a view the user has panned or
-  zoomed to is kept. Boards need no own resize code.
+- **Hidden boards and resizing.** Board code runs while the page loads, also
+  for a board in a Quarto tab that is not shown or in a collapsed callout, so
+  `DOMContentLoaded`, `load` and `document.write` behave as always. JSXGraph's
+  own resize observer then sizes the board when it is shown and follows its
+  container on any later resize (window, tab, mobile width); the container
+  keeps its CSS size, so the board narrows with the page. The extension adds
+  two things JSXGraph does not do yet: a board created while hidden gets, when
+  first shown, the view it would have had if created visible at that size
+  (`boundingbox`, `keepaspectratio`, `unitX`/`unitY` with `originX`/`originY`,
+  or a view its code set meanwhile), and each board re-reads its size shortly
+  after the iframe is shown or resized (JSXGraph 1.9.2 to 1.14.0 can keep a
+  stale size then). Boards need no resize code of their own.
+- **JSXGraph version.** Use JSXGraph 1.13.2 or later (the default resolves to
+  the newest 1.x release). In 1.13.0 and 1.13.1, a `functiongraph` with an
+  interval throws when created in a hidden tab, which stops the rest of the
+  board code.
 
 ---
 

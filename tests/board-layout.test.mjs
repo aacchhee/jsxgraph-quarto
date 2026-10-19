@@ -1,8 +1,9 @@
-// The generated iframe defers the board code until the iframe has a size,
-// defines BOARDID for the whole code, and resizes without fixing the
-// container's pixel size. Browser behaviour is tested in ctm-assessment
-// (integration/feedback/jsxgraph-layout.cjs: nested tabs, collapsed callout,
-// mobile width, user view, hidden assessment request).
+// The generated iframe runs the board code inline, defines BOARDID for the
+// whole code, and leaves resizing to JSXGraph's own resize observer, with two
+// additions: a board created while hidden gets its intended view when first
+// shown, and boards re-read their size after the iframe's resize event.
+// Browser behaviour is tested in ctm-assessment
+// (integration/feedback/jsxgraph-layout.cjs).
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -14,19 +15,23 @@ test('BOARDID is defined for the whole board code', () => {
   assert.match(lua, /use strict/, "the prelude goes after a leading 'use strict'");
 });
 
-test('board code runs while the page is parsed, at a provisional size when hidden', () => {
+test('board code runs while the page is parsed', () => {
   assert.match(lua, /<script>%s<\/script>\n<\/body>/, 'board code is the last inline script, as upstream');
-  assert.doesNotMatch(lua, /jsxgraph-board-code/);
-  assert.match(lua, /if \(box && !\(window\.innerWidth > 0 && window\.innerHeight > 0\)\)/);
-  assert.match(lua, /const provisionalSize = \[%d, %d\];/);
   assert.match(lua, /window\.addEventListener\('load', resolve, \{once: true\}\)/, 'a request waits for load handlers');
 });
 
-test('resizing keeps the container fluid and restores the intended view', () => {
-  assert.match(lua, /board\.resizeContainer\(width, height, true, true\)/);
-  assert.doesNotMatch(lua, /board\.resizeContainer\(width, height\);/);
-  assert.match(lua, /board\.setBoundingBox\(fit\(view\.intended, board, width, height\), board\.keepaspectratio\)/);
-  assert.match(lua, /const width = container\.clientWidth, height = container\.clientHeight;/, "sized from the container");
-  assert.match(lua, /JXG\.JSXGraph\.initBoard = function/, 'views are recorded when boards are created');
-  assert.match(lua, /JXG\.Options\.board\.resize\.enabled = false/, 'one resizer: the extension');
+test("JSXGraph's resize observer does the resizing; no fixed pixel size", () => {
+  assert.doesNotMatch(lua, /resize\.enabled = false/, "JSXGraph's observer stays on");
+  assert.doesNotMatch(lua, /resizeContainer\(width, height\)/, 'no pixel size on the container');
+  assert.match(lua, /window\.addEventListener\('resize', refreshBoards\)/);
+  assert.match(lua, /board\.updateContainerDims\(\);/, 'size re-read from the container');
+});
+
+test('a board created while hidden gets its view when first shown', () => {
+  assert.match(lua, /JXG\.JSXGraph\.initBoard = function/);
+  assert.match(lua, /!\(board\.canvasWidth > 0 && board\.canvasHeight > 0\) && board\.origin\) startWhenShown\(board\)/);
+});
+
+test('the default JSXGraph is the 1.x line', () => {
+  assert.match(lua, /src_jxg = 'https:\/\/cdn\.jsdelivr\.net\/npm\/jsxgraph@1\/distrib\/jsxgraphcore\.js'/);
 });
