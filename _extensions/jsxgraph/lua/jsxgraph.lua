@@ -612,32 +612,54 @@ board%s.reload = function() { window.location.reload(); };
   //    other than the one it gets when created visible, and a view the code
   //    set meanwhile is lost. Such a board keeps the view its code asks for
   //    and gets it at its first real size, as if created visible at that size.
-  function fit(box, width, height) {  // as initBoard with keepaspectratio
+  // 2. On resizing, JSXGraph keeps a keepaspectratio board's vertical extent
+  //    and crops the sides when the container narrows. Such a board shows the
+  //    whole view its code, the user (zoom, pan) or initBoard set, fitted
+  //    with one scale and centred, as initBoard does.
+  function fit(box, width, height) {
     const scale = Math.min(width / (box[2] - box[0]), height / (box[1] - box[3]));
     const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
     return [cx - width / (2 * scale), cy + height / (2 * scale), cx + width / (2 * scale), cy - height / (2 * scale)];
   }
-  function startWhenShown(board) {
-    const attr = board.attr;
-    let view = attr.unitx || attr.unity ? null : [attr.boundingbox.slice(), !!board.keepaspectratio];
+  const finite = (box) => Array.isArray(box) && box.length === 4 && box.every(Number.isFinite);
+  const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 1e-9 * Math.max(1, Math.abs(v)));
+  function keepView(board) {
+    const proto = JXG.Board.prototype, attr = board.attr;
     const origin = board.origin.scrCoords.slice(1);
-    board.setBoundingBox = function (box, keep) {
-      if (Array.isArray(box) && box.every(Number.isFinite)) view = [box.slice(), !!keep];
-      return JXG.Board.prototype.setBoundingBox.apply(this, arguments);
+    let view = attr.unitx || attr.unity ? null : attr.boundingbox.slice();
+    let shown = board.canvasWidth > 0 && board.canvasHeight > 0, last = board.getBoundingBox(), own = false;
+    board.setBoundingBox = function (box) {
+      if (!own && finite(box)) view = box.slice();
+      proto.setBoundingBox.apply(this, arguments);
+      if (!own) last = this.getBoundingBox();
+      return this;
     };
-    board.updateContainerDims = function (width, height) {
+    board.resizeContainer = function (w, h, dontset, dontSetBoundingBox) {
+      if (dontSetBoundingBox || !(w > 0 && h > 0) || (shown && !this.keepaspectratio)) return proto.resizeContainer.apply(this, arguments);
+      const current = this.getBoundingBox(), keep = this.keepaspectratio;
+      if (shown && finite(current) && !same(current, last)) view = current.slice();  // panned since
+      proto.resizeContainer.call(this, w, h, dontset, true);
+      own = true;
+      try {
+        if (view) {
+          this.setBoundingBox(keep ? fit(view, w, h) : view, false);
+          this.keepaspectratio = keep;
+        } else {
+          this.moveOrigin(origin[0], origin[1]);
+        }
+      } finally { own = false; }
+      shown = true;
+      last = this.getBoundingBox();
+      return this;
+    };
+    // Hidden at creation: skip JSXGraph's re-initialisation from the
+    // boundingbox attribute at the first real size.
+    if (!shown) board.updateContainerDims = function (width, height) {
       const w = width === undefined ? this.containerObj.clientWidth : width;
       const h = height === undefined ? this.containerObj.clientHeight : height;
       if (!(w > 0 && h > 0)) return this;
-      delete this.setBoundingBox;
       delete this.updateContainerDims;
-      this.resizeContainer(w, h, true, true);
-      if (view) {
-        this.setBoundingBox(view[1] ? fit(view[0], w, h) : view[0], false);
-        this.keepaspectratio = view[1];
-      } else {
-        this.moveOrigin(origin[0], origin[1]);
-      }
+      this.resizeContainer(w, h, true);
       this._prevDim = {w: w, h: h};
       return this;
     };
@@ -647,13 +669,13 @@ board%s.reload = function() { window.location.reload(); };
     JXG.JSXGraph.initBoard = function () {
       const board = initBoard.apply(this, arguments);
       try {
-        if (!(board.canvasWidth > 0 && board.canvasHeight > 0) && board.origin) startWhenShown(board);
+        if (board.origin && (board.keepaspectratio || !(board.canvasWidth > 0 && board.canvasHeight > 0))) keepView(board);
       } catch (error) { /* keep the board usable */ }
       return board;
     };
   }
 
-  // 2. Since JSXGraph 1.9.2 the observer applies the first size reported
+  // 3. Since JSXGraph 1.9.2 the observer applies the first size reported
   //    within its 10 ms throttle and drops the later ones. When Chrome shows
   //    a hidden data: iframe it reports 0x0 and then the real size, so the
   //    board stayed blank. The iframe gets a resize event when it is shown or

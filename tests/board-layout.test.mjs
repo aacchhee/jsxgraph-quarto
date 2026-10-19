@@ -1,7 +1,6 @@
 // The generated iframe runs the board code inline, defines BOARDID for the
 // whole code, and leaves resizing to JSXGraph's own resize observer, with two
-// additions: a board created while hidden gets its intended view when first
-// shown, and boards re-read their size after the iframe's resize event.
+// additions, and boards re-read their size after the iframe's resize event.
 // Browser behaviour is tested in ctm-assessment
 // (integration/feedback/jsxgraph-layout.cjs).
 import assert from 'node:assert/strict';
@@ -27,9 +26,10 @@ test("JSXGraph's resize observer does the resizing; no fixed pixel size", () => 
   assert.match(lua, /board\.updateContainerDims\(\);/, 'size re-read from the container');
 });
 
-test('a board created while hidden gets its view when first shown', () => {
+test('hidden-start and keepaspectratio boards keep the view their code asks for', () => {
   assert.match(lua, /JXG\.JSXGraph\.initBoard = function/);
-  assert.match(lua, /!\(board\.canvasWidth > 0 && board\.canvasHeight > 0\) && board\.origin\) startWhenShown\(board\)/);
+  assert.match(lua, /board\.keepaspectratio \|\| !\(board\.canvasWidth > 0 && board\.canvasHeight > 0\)\)\) keepView\(board\)/);
+  assert.match(lua, /this\.setBoundingBox\(keep \? fit\(view, w, h\) : view, false\)/, 'keep-aspect boards show their whole view');
 });
 
 test('the default JSXGraph is the 1.x line', () => {
