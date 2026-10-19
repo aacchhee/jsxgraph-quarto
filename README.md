@@ -228,12 +228,14 @@ Check out a working example: [example.qmd](example.qmd).
   own resize observer then sizes the board when it is shown and follows its
   container on any later resize (window, tab, mobile width); the container
   keeps its CSS size, so the board narrows with the page. The extension adds
-  two things JSXGraph does not do yet: a board created while hidden gets, when
+  three things JSXGraph does not do: a board created while hidden gets, when
   first shown, the view it would have had if created visible at that size
   (`boundingbox`, `keepaspectratio`, `unitX`/`unitY` with `originX`/`originY`,
-  or a view its code set meanwhile), and each board re-reads its size shortly
-  after the iframe is shown or resized (JSXGraph 1.9.2 to 1.14.0 can keep a
-  stale size then). Boards need no resize code of their own.
+  or a view its code set meanwhile); a `keepaspectratio` board shows its
+  whole view at any width (JSXGraph would crop its sides on a narrow
+  screen); and each board re-reads its size shortly after the iframe is
+  shown or resized (JSXGraph 1.9.2 to 1.14.0 can keep a stale size then).
+  Boards need no resize code of their own.
 - **JSXGraph version.** Use JSXGraph 1.13.2 or later (the default resolves to
   the newest 1.x release). In 1.13.0 and 1.13.1, a `functiongraph` with an
   interval throws when created in a hidden tab, which stops the rest of the
