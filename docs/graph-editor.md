@@ -84,9 +84,9 @@ var editor = JXG.QuartoGraphEditor.create({board: board});
 | `register(spec)` | Registers the response with `JXG.QuartoAssessment`. |
 
 Editors made by `createBoard()` also expose `resize()`, which synchronizes
-JSXGraph with the visible container. A `ResizeObserver`, initial animation
-frames, iframe resize events, and the parent layout notification normally call
-this automatically.
+JSXGraph with the visible container. The editor's own `ResizeObserver` and
+initial animation frames call it; JSXGraph's resize observer, the iframe's
+resize event and the parent layout notification resize the board as well.
 
 ## Graph response
 

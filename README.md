@@ -231,11 +231,20 @@ Check out a working example: [example.qmd](example.qmd).
   three things JSXGraph does not do: a board created while hidden gets, when
   first shown, the view it would have had if created visible at that size
   (`boundingbox`, `keepaspectratio`, `unitX`/`unitY` with `originX`/`originY`,
-  or a view its code set meanwhile); a `keepaspectratio` board shows its
-  whole view at any width (JSXGraph would crop its sides on a narrow
-  screen); and each board re-reads its size shortly after the iframe is
-  shown or resized (JSXGraph 1.9.2 to 1.14.0 can keep a stale size then).
-  Boards need no resize code of their own.
+  or a view its code set meanwhile); a `keepaspectratio` board with a
+  `boundingbox` shows its whole view at any width (JSXGraph's own rule keeps
+  one side and may crop the other on a narrow screen); and each board
+  re-reads its size shortly after the iframe is shown or resized (JSXGraph
+  1.9.2 to 1.14.0 can keep a stale size then). Boards need no resize code of
+  their own.
+- **Known limits.** The navigation bar's home button (`zoom100`) uses
+  JSXGraph's rule, so on a narrow screen it may crop a `keepaspectratio`
+  board that the resize had fitted. A `keepaspectratio` board set up with
+  `unitX`/`unitY` and `originX`/`originY` keeps its units and origin, so a
+  narrow screen cuts its right side. An assessment request with `ai.render`
+  for a board that has never been shown returns an empty picture (the
+  board has no size yet). Board code with its own resize handling (e.g.
+  `setBoundingBox(box, true)` on every resize) decides the view itself.
 - **JSXGraph version.** Use JSXGraph 1.13.2 or later (the default resolves to
   the newest 1.x release). In 1.13.0 and 1.13.1, a `functiongraph` with an
   interval throws when created in a hidden tab, which stops the rest of the
