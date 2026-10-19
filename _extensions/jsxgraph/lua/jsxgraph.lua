@@ -178,18 +178,6 @@ local function renderJsxgraph(globalOptions)
         local jsxgraph = content.text
         jsxgraph = jsxgraph:gsub("initBoard%(%s*BOARDID%s*,", 'initBoard("jxg_box",')
         jsxgraph = jsxgraph:gsub([[initBoard%s*%(%s*(['"])[^'"]*%1%s*,]], 'initBoard("' .. id .. '",')
-        -- BOARDID names the board's container everywhere in the code, not only
-        -- inside initBoard(...) (e.g. document.getElementById(BOARDID)).
-        -- A window property, not a declaration: page code may declare its own.
-        -- After a leading 'use strict' directive, which must stay first.
-        local prelude = 'window.BOARDID = "' .. id .. '";\n'
-        local directive = jsxgraph:match("^(%s*(['\"])use strict%2%s*;?[ \t]*\n?)(.*)$")
-        if directive then
-            jsxgraph = directive .. prelude .. jsxgraph:sub(#directive + 1)
-        else
-            jsxgraph = prelude .. jsxgraph
-        end
-
         local out = 'svg'
         if quarto.doc.is_format("html") then out = options.out end
         if isNonemptyString(options.echo) then options.echo = options.echo=="true" end
@@ -341,6 +329,8 @@ if (unit === "%%") {
         await page.addScriptTag({url: src_jxg});
     }
 
+    // BOARDID names the board's container everywhere in the code.
+    await page.evaluate((uuid) => { window.BOARDID = uuid; }, uuid);
     await page.evaluate((uuid) => {
             ]]) .. jsxgraph .. string.format([[
     }, uuid);
@@ -576,6 +566,11 @@ board%s.reload = function() { window.location.reload(); };
   const protocol = 'jsxgraph-quarto-assessment';
   const version = 1;
   const assessmentId = %q;
+  // BOARDID names the board's container everywhere in the board code (e.g.
+  // document.getElementById(BOARDID)), not only in initBoard(BOARDID, ...).
+  // Set here, so the board code is not changed ('use strict' stays first);
+  // a window property, so page code may still declare its own BOARDID.
+  window.BOARDID = %q;
   let registration = null;
 
   async function svgToPng(dataUri, board) {
@@ -616,10 +611,12 @@ board%s.reload = function() { window.location.reload(); };
   //    and crops the sides when the container narrows. Such a board shows the
   //    whole view its code, the user (zoom, pan) or initBoard set, fitted
   //    with one scale and centred, as initBoard does.
-  function fit(box, width, height) {
-    const scale = Math.min(width / (box[2] - box[0]), height / (box[1] - box[3]));
+  function fit(box, width, height) {  // keeps the direction of each axis
+    const dx = box[2] - box[0], dy = box[1] - box[3];
+    const scale = Math.min(width / Math.abs(dx), height / Math.abs(dy));
+    const hx = Math.sign(dx) * width / (2 * scale), hy = Math.sign(dy) * height / (2 * scale);
     const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
-    return [cx - width / (2 * scale), cy + height / (2 * scale), cx + width / (2 * scale), cy - height / (2 * scale)];
+    return [cx - hx, cy + hy, cx + hx, cy - hy];
   }
   const finite = (box) => Array.isArray(box) && box.length === 4 && box.every(Number.isFinite);
   const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 1e-9 * Math.max(1, Math.abs(v)));
@@ -642,7 +639,7 @@ board%s.reload = function() { window.location.reload(); };
       own = true;
       try {
         if (view) {
-          this.setBoundingBox(keep ? fit(view, w, h) : view, false);
+          this.setBoundingBox(keep ? fit(view, w, h) : view, false, 'keep');  // keeps the zoom factors
           this.keepaspectratio = keep;
         } else {
           this.moveOrigin(origin[0], origin[1]);
@@ -684,7 +681,10 @@ board%s.reload = function() { window.location.reload(); };
   function refreshBoards() {
     setTimeout(() => Object.values(JXG.boards || {}).forEach((board) => {
       if (!board.attr || !board.attr.resize || !board.attr.resize.enabled) return;  // its code resizes it
-      try { board.updateContainerDims(); } catch (error) { /* next board */ }
+      try { board.updateContainerDims(); } catch (error) {
+        if (!board.quartoWarned) console.warn('JSXGraph board ' + board.id + ': resize failed', error);
+        board.quartoWarned = true;
+      }
     }), 50);
   }
 
@@ -748,7 +748,7 @@ board%s.reload = function() { window.location.reload(); };
   });
   window.addEventListener('resize', refreshBoards);
 })();
-]], assessment_id)
+]], assessment_id, id)
 
             local icontent = string.format([[
 <!DOCTYPE html>
@@ -806,10 +806,7 @@ function Pandoc(doc)
         echo = false,
         unit = 'px',
         reload = false,
-        -- JSXGraph 1.x: the newest 1.x release (1.14.0 when this was written,
-        -- so at least 1.13.2, which boards in hidden tabs need), but no
-        -- unannounced switch to a new major version on published pages.
-        -- jsDelivr documents only major/minor prefixes, no "at least 1.13.2".
+        -- The newest JSXGraph 1.x (>= 1.13.2 is needed), never a new major version.
         src_jxg = 'https://cdn.jsdelivr.net/npm/jsxgraph@1/distrib/jsxgraphcore.js',
         src_css = 'https://cdn.jsdelivr.net/npm/jsxgraph@1/distrib/jsxgraph.css',
         src_mjx = 'https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-svg.js'
