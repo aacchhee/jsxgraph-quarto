@@ -570,28 +570,12 @@ board%s.reload = function() { window.location.reload(); };
             if not GRAPH_EDITOR_JS then
                 GRAPH_EDITOR_JS = ioRead(joinPath(extension_dir, "graph-editor.js"))
             end
-            -- Pixel size for a board started while hidden (see the bridge).
-            local w, h = tonumber(options.width) or 0, tonumber(options.height) or 0
-            if not (w > 0 and h > 0) then w, h = 800, 450 end
-            local provisional_width, provisional_height
-            if options.unit == "px" then
-                provisional_width, provisional_height = math.floor(w + 0.5), math.floor(h + 0.5)
-            else
-                provisional_width = 800
-                provisional_height = math.floor(800 * h / w + 0.5)
-            end
             local assessment_bridge = string.format([[
 (function () {
   'use strict';
   const protocol = 'jsxgraph-quarto-assessment';
   const version = 1;
   const assessmentId = %q;
-  const boardId = %q;
-  // A size for a board that must start while hidden (an assessment request):
-  // a hidden iframe lays nothing out, but JSXGraph reads a container's CSS
-  // pixel size then. The board gets its real size when it is shown.
-  const provisionalSize = [%d, %d];
-  let provisional = null;
   let registration = null;
 
   async function svgToPng(dataUri, board) {
@@ -619,102 +603,21 @@ board%s.reload = function() { window.location.reload(); };
     return boards.length ? boards[0] : null;
   }
 
-  // The board fills the iframe. Hidden tabs and collapsed blocks give the
-  // iframe no size; resizing follows the iframe, without fixing the
-  // container's pixel size, and shows the intended view: the bounding box the
-  // board was created with, or the one the page's code or the user set later.
-  function validBox(box) {
-    return Array.isArray(box) && box.length === 4 && box.every(Number.isFinite) &&
-      box[2] > box[0] && box[1] > box[3];
-  }
-  function sameBox(a, b) {
-    return validBox(a) && validBox(b) && a.every((value, i) => Math.abs(value - b[i]) <= 1e-9 * Math.max(1, Math.abs(b[i])));
-  }
-  const containerObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => scheduleBoardRefresh()) : null;
-  function remember(board) {
-    // With unitX/unitY (and originX/originY) JSXGraph ignores boundingbox, so
-    // the view the board was created with is its current one.
-    const attr = board.attr || {}, current = board.getBoundingBox();
-    const initial = !(attr.unitx || attr.unity) && attr.boundingbox;
-    board.quartoView = {intended: validBox(initial) ? initial.slice() : (validBox(current) ? current.slice() : null), last: current,
-      units: !!(attr.unitx || attr.unity), provisional: !!provisional};
-    // Follow the container itself too: board code may resize it (a side panel).
-    // One observer for all containers: observing an element again is a no-op,
-    // so boards that are freed and created again do not add observers.
-    if (containerObserver && board.containerObj) containerObserver.observe(board.containerObj);
-  }
-  // The extension resizes the boards (below); JSXGraph's own resize observer
-  // would adjust the view a second time. Board code can still enable it.
-  if (JXG.Options && JXG.Options.board && JXG.Options.board.resize) JXG.Options.board.resize.enabled = false;
-  // Record each board's view as created, before any later change.
-  if (JXG.JSXGraph && typeof JXG.JSXGraph.initBoard === 'function') {
-    const initBoard = JXG.JSXGraph.initBoard;
-    JXG.JSXGraph.initBoard = function () {
-      const board = initBoard.apply(this, arguments);
-      try { remember(board); } catch (error) { /* keep the board usable */ }
-      return board;
-    };
-  }
-  // With keepaspectratio the whole intended box stays visible: one scale for
-  // both directions, centred (JSXGraph's setBoundingBox may crop instead).
-  function fit(box, board, width, height) {
-    if (!board.keepaspectratio) return box.slice();
-    const scale = Math.min(width / (box[2] - box[0]), height / (box[1] - box[3]));
-    const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
-    return [cx - width / (2 * scale), cy + height / (2 * scale), cx + width / (2 * scale), cy - height / (2 * scale)];
-  }
+  // JSXGraph's own ResizeObserver resizes each board with its container (a
+  // tab or collapsed block shown, a narrower window), without fixing the
+  // container's CSS size.
+  //
+  // 2. Since JSXGraph 1.9.2 the observer applies the first size reported
+  //    within its 10 ms throttle and drops the later ones. When Chrome shows
+  //    a hidden data: iframe it reports 0x0 and then the real size, so the
+  //    board stayed blank. The iframe gets a resize event when it is shown or
+  //    resized: read each board's size again a little later. This changes
+  //    nothing when the size is already right, and fixes no CSS size.
   function refreshBoards() {
-    const visible = window.innerWidth > 0 && window.innerHeight > 0;
-    // Still hidden after a provisional start: leave the boards as created (a
-    // layout message may arrive before the iframe is shown).
-    if (provisional && !visible) return;
-    // Shown at last: the container fills the iframe again.
-    if (provisional) {
-      if (provisional.element.style.width === provisional.width) provisional.element.style.width = provisional.previous[0];
-      if (provisional.element.style.height === provisional.height) provisional.element.style.height = provisional.previous[1];
-      provisional = null;
-    }
-    Object.values(JXG.boards || {}).forEach((board) => {
-      const container = board.containerObj;
-      if (!container || typeof board.resizeContainer !== 'function') return;
-      // The container keeps its CSS size (100%% of the iframe unless the board
-      // code lays it out otherwise), so its size is the board's size.
-      const width = container.clientWidth, height = container.clientHeight;
-      if (!(width > 0 && height > 0)) return;
-      if (!board.quartoView) remember(board);
-      const view = board.quartoView, current = board.getBoundingBox();
-      // A view set since the last refresh (by the page's code or the user's pan
-      // or zoom) becomes the one to keep.
-      const adopted = validBox(current) && !sameBox(current, view.last);
-      if (adopted) view.intended = current.slice();
-      const changed = Math.abs((board.canvasWidth || 0) - width) > 1 || Math.abs((board.canvasHeight || 0) - height) > 1;
-      // First real size after a hidden start: a board set up with origin and
-      // units keeps them, as if it had started visible at this size
-      // (resizeContainer would move the origin by half the size change).
-      // A box the code set meanwhile is kept instead (above).
-      const keepOrigin = view.provisional && view.units && !adopted && board.origin && board.origin.scrCoords
-        ? [board.origin.scrCoords[1], board.origin.scrCoords[2] ] : null;
-      if (changed) board.resizeContainer(width, height, true, true);
-      if (view.provisional) {
-        view.provisional = false;
-        if (keepOrigin && typeof board.moveOrigin === 'function') board.moveOrigin(keepOrigin[0], keepOrigin[1]);
-        if (view.units && !adopted) view.intended = board.getBoundingBox().slice();
-      }
-      if (view.intended && (changed || !validBox(current))) board.setBoundingBox(fit(view.intended, board, width, height), board.keepaspectratio);
-      view.last = board.getBoundingBox();
-      if (typeof board.fullUpdate === 'function') board.fullUpdate();
-      else if (typeof board.update === 'function') board.update();
-    });
-  }
-
-  function scheduleBoardRefresh() {
-    refreshBoards();
-    if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(() => {
-        refreshBoards();
-        requestAnimationFrame(refreshBoards);
-      });
-    }
+    setTimeout(() => Object.values(JXG.boards || {}).forEach((board) => {
+      if (!board.attr || !board.attr.resize || !board.attr.resize.enabled) return;  // its code resizes it
+      try { board.updateContainerDims(); } catch (error) { /* next board */ }
+    }), 50);
   }
 
   JXG.QuartoAssessment = {
@@ -731,7 +634,7 @@ board%s.reload = function() { window.location.reload(); };
     if (event.source !== window.parent || !message || message.protocol !== protocol ||
         message.version !== version || message.assessmentId !== assessmentId) return;
     if (message.type === 'layout') {
-      scheduleBoardRefresh();
+      refreshBoards();
       return;
     }
     if (message.type !== 'request') return;
@@ -775,23 +678,9 @@ board%s.reload = function() { window.location.reload(); };
     }
     window.parent.postMessage(reply, '*');
   });
-  window.addEventListener('resize', scheduleBoardRefresh);
-  if (typeof ResizeObserver === 'function') new ResizeObserver(scheduleBoardRefresh).observe(document.documentElement);
-
-  // The board code runs while the page is parsed, as in upstream, so
-  // DOMContentLoaded, load and document.write behave as always. A hidden tab
-  // or collapsed block gives the iframe no size and lays nothing out; JSXGraph
-  // then reads the container's CSS pixel size, so the container gets a
-  // provisional one until the iframe is shown (refreshBoards).
-  const box = document.getElementById(boardId);
-  if (box && !(window.innerWidth > 0 && window.innerHeight > 0)) {
-    const width = provisionalSize[0] + 'px', height = provisionalSize[1] + 'px';
-    provisional = {element: box, width, height, previous: [box.style.width, box.style.height]};
-    box.style.width = width;
-    box.style.height = height;
-  }
+  window.addEventListener('resize', refreshBoards);
 })();
-]], assessment_id, id, provisional_width, provisional_height)
+]], assessment_id)
 
             local icontent = string.format([[
 <!DOCTYPE html>
@@ -849,8 +738,10 @@ function Pandoc(doc)
         echo = false,
         unit = 'px',
         reload = false,
-        -- JSXGraph 1.x: any later 1.x release, but no unannounced switch to a
-        -- new major version on already published pages.
+        -- JSXGraph 1.x: the newest 1.x release (1.14.0 when this was written,
+        -- so at least 1.13.2, which boards in hidden tabs need), but no
+        -- unannounced switch to a new major version on published pages.
+        -- jsDelivr documents only major/minor prefixes, no "at least 1.13.2".
         src_jxg = 'https://cdn.jsdelivr.net/npm/jsxgraph@1/distrib/jsxgraphcore.js',
         src_css = 'https://cdn.jsdelivr.net/npm/jsxgraph@1/distrib/jsxgraph.css',
         src_mjx = 'https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-svg.js'
