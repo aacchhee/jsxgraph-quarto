@@ -603,10 +603,14 @@ board%s.reload = function() { window.location.reload(); };
   //
   // 1. A board created while the iframe is hidden has no size, so JSXGraph
   //    cannot set its view yet: when shown, a board set up with unitX/unitY
-  //    and originX/originY gets infinite units, a keepaspectratio board a view
-  //    other than the one it gets when created visible, and a view the code
-  //    set meanwhile is lost. Such a board keeps the view its code asks for
-  //    and gets it at its first real size, as if created visible at that size.
+  //    and originX/originY gets infinite units, and a view the code set
+  //    meanwhile is lost. With JSXGraph 1.14.0 and older, a keepaspectratio
+  //    board also gets a view other than the one it gets when created visible
+  //    (fixed upstream in 3ccdebe7). Such a board keeps the view its code asks
+  //    for and gets it at its first real size, as if created visible at that
+  //    size. The hidden-start override below also bypasses JSXGraph's own
+  //    re-initialisation from boundingbox at the first size, so the view is
+  //    applied exactly once.
   // 2. On resizing, JSXGraph keeps a keepaspectratio board's vertical extent
   //    and crops the sides when the container narrows. Such a board shows the
   //    whole view its code, the user (zoom, pan) or initBoard set, fitted
@@ -672,12 +676,17 @@ board%s.reload = function() { window.location.reload(); };
     };
   }
 
-  // 3. Since JSXGraph 1.9.2 the observer applies the first size reported
-  //    within its 10 ms throttle and drops the later ones. When Chrome shows
+  // 3. JSXGraph 1.9.2 to 1.14.0 apply the first size the observer reports
+  //    within its 10 ms throttle and drop the later ones. When Chrome shows
   //    a hidden data: iframe it reports 0x0 and then the real size, so the
-  //    board stayed blank. The iframe gets a resize event when it is shown or
-  //    resized: read each board's size again a little later. This changes
-  //    nothing when the size is already right, and fixes no CSS size.
+  //    board stayed blank. This is fixed upstream in 87935dee, released after
+  //    1.14.0. The iframe gets a resize event when it is shown or resized:
+  //    read each board's size again a little later. This stays for those
+  //    versions (a pinned or bundled src_jxg), and because JSXGraph still
+  //    stops its observer for good after one exception in a resize-triggered
+  //    update: re-reading the size on the iframe's resize keeps such a board
+  //    following its container. It changes nothing when the size is already
+  //    right, and fixes no CSS size.
   function refreshBoards() {
     setTimeout(() => Object.values(JXG.boards || {}).forEach((board) => {
       if (!board.attr || !board.attr.resize || !board.attr.resize.enabled) return;  // its code resizes it
