@@ -235,7 +235,9 @@ Check out a working example: [example.qmd](example.qmd).
   `boundingbox` shows its whole view at any width (JSXGraph's own rule keeps
   one side and may crop the other on a narrow screen); and each board
   re-reads its size shortly after the iframe is shown or resized (JSXGraph
-  1.9.2 to 1.14.0 can keep a stale size then). Boards need no resize code of
+  1.9.2 to 1.14.0 can keep a stale size then; fixed in later releases). This
+  re-read also keeps a board following its container after an error in board
+  code has stopped JSXGraph's resize observer. Boards need no resize code of
   their own.
 - **Known limits.** The navigation bar's home button (`zoom100`) uses
   JSXGraph's rule, so on a narrow screen it may crop a `keepaspectratio`
@@ -248,7 +250,13 @@ Check out a working example: [example.qmd](example.qmd).
 - **JSXGraph version.** Use JSXGraph 1.13.2 or later (the default resolves to
   the newest 1.x release). In 1.13.0 and 1.13.1, a `functiongraph` with an
   interval throws when created in a hidden tab, which stops the rest of the
-  board code.
+  board code. The release after 1.14.0 fixes, in JSXGraph itself, the blank
+  board after a hidden tab is shown (87935dee), the view of a hidden
+  `keepaspectratio` board (3ccdebe7) and a possible endless loop in the SVG
+  renderer (99c11a02); the default URL picks it up. Still open in JSXGraph,
+  and covered by the extension: one error during a resize stops JSXGraph's
+  resize observer for good, and a board with `unitX`/`originX` created hidden
+  gets a wrong view. The bundled offline copy is still 1.13.3.
 
 ---
 
