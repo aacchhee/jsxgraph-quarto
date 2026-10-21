@@ -598,19 +598,24 @@ board%s.reload = function() { window.location.reload(); };
     return boards.length ? boards[0] : null;
   }
 
+  // The extension requires JSXGraph 1.14.1 or later and has no workarounds
+  // for older versions (a src_jxg that loads one is used at the user's own risk).
+  try {
+    const v = String(JXG.version).split('.').map((n) => parseInt(n, 10));
+    if (v[0] === 1 && (v[1] < 14 || (v[1] === 14 && v[2] < 1))) {
+      console.warn('The jsxgraph Quarto extension requires JSXGraph 1.14.1 or later; this page loads ' + JXG.version + '.');
+    }
+  } catch (error) { /* no version to check */ }
+
   // JSXGraph's own ResizeObserver resizes each board with its container (a
   // tab or collapsed block shown, a narrower window). Two gaps remain:
   //
   // 1. A board created while the iframe is hidden has no size, so JSXGraph
   //    cannot set its view yet: when shown, a board set up with unitX/unitY
-  //    and originX/originY gets infinite units, and a view the code set
-  //    meanwhile is lost. With JSXGraph 1.14.0 and older, a keepaspectratio
-  //    board also gets a view other than the one it gets when created visible
-  //    (fixed upstream in 3ccdebe7, released in 1.14.1). Such a board keeps
-  //    the view its code asks for and gets it at its first real size, as if
-  //    created visible at that size. The hidden-start override below also
-  //    bypasses JSXGraph's own re-initialisation from boundingbox at the first
-  //    size, so the view is applied exactly once.
+  //    and originX/originY gets infinite units (still open in 1.14.1), and a
+  //    view the code set meanwhile is lost. Such a board keeps the view its
+  //    code asks for and gets it at its first real size, as if created
+  //    visible at that size.
   // 2. On resizing, JSXGraph keeps a keepaspectratio board's vertical extent
   //    and crops the sides when the container narrows. Such a board shows the
   //    whole view its code, the user (zoom, pan) or initBoard set, fitted
@@ -653,17 +658,6 @@ board%s.reload = function() { window.location.reload(); };
       last = this.getBoundingBox();
       return this;
     };
-    // Hidden at creation: skip JSXGraph's re-initialisation from the
-    // boundingbox attribute at the first real size.
-    if (!shown) board.updateContainerDims = function (width, height) {
-      const w = width === undefined ? this.containerObj.clientWidth : width;
-      const h = height === undefined ? this.containerObj.clientHeight : height;
-      if (!(w > 0 && h > 0)) return this;
-      delete this.updateContainerDims;
-      this.resizeContainer(w, h, true);
-      this._prevDim = {w: w, h: h};
-      return this;
-    };
   }
   if (JXG.JSXGraph && typeof JXG.JSXGraph.initBoard === 'function') {
     const initBoard = JXG.JSXGraph.initBoard;
@@ -674,27 +668,6 @@ board%s.reload = function() { window.location.reload(); };
       } catch (error) { /* keep the board usable */ }
       return board;
     };
-  }
-
-  // 3. JSXGraph 1.9.2 to 1.14.0 apply the first size the observer reports
-  //    within its 10 ms throttle and drop the later ones. When Chrome shows
-  //    a hidden data: iframe it reports 0x0 and then the real size, so the
-  //    board stayed blank. This is fixed upstream in 87935dee, released in
-  //    1.14.1. The iframe gets a resize event when it is shown or resized:
-  //    read each board's size again a little later. This stays for older
-  //    versions (a pinned src_jxg), and because JSXGraph 1.14.0 and older
-  //    stop their observer for good after one exception in a resize-triggered
-  //    update (fixed in 0a79254a, released in 1.14.1): re-reading the size on
-  //    the iframe's resize keeps such a board following its container. It
-  //    changes nothing when the size is already right, and fixes no CSS size.
-  function refreshBoards() {
-    setTimeout(() => Object.values(JXG.boards || {}).forEach((board) => {
-      if (!board.attr || !board.attr.resize || !board.attr.resize.enabled) return;  // its code resizes it
-      try { board.updateContainerDims(); } catch (error) {
-        if (!board.quartoWarned) console.warn('JSXGraph board ' + board.id + ': resize failed', error);
-        board.quartoWarned = true;
-      }
-    }), 50);
   }
 
   JXG.QuartoAssessment = {
@@ -710,10 +683,9 @@ board%s.reload = function() { window.location.reload(); };
     const message = event.data;
     if (event.source !== window.parent || !message || message.protocol !== protocol ||
         message.version !== version || message.assessmentId !== assessmentId) return;
-    if (message.type === 'layout') {
-      refreshBoards();
-      return;
-    }
+    // 'layout' is still accepted, but JSXGraph's own resize observer already
+    // sizes the boards when the iframe is shown or resized: nothing to do.
+    if (message.type === 'layout') return;
     if (message.type !== 'request') return;
     // Board code may register in a load handler: wait for the page's load
     // event (MathJax may still be loading), at most a few seconds.
@@ -755,7 +727,6 @@ board%s.reload = function() { window.location.reload(); };
     }
     window.parent.postMessage(reply, '*');
   });
-  window.addEventListener('resize', refreshBoards);
 })();
 ]], assessment_id, id)
 
@@ -815,9 +786,10 @@ function Pandoc(doc)
         echo = false,
         unit = 'px',
         reload = false,
-        -- The newest JSXGraph 1.x (>= 1.13.2 is needed), never a new major version.
-        src_jxg = 'https://cdn.jsdelivr.net/npm/jsxgraph@1/distrib/jsxgraphcore.js',
-        src_css = 'https://cdn.jsdelivr.net/npm/jsxgraph@1/distrib/jsxgraph.css',
+        -- The newest JSXGraph 1.x, and at least 1.14.1 (which the extension
+        -- requires); never a new major version. jsDelivr resolves the range.
+        src_jxg = 'https://cdn.jsdelivr.net/npm/jsxgraph@^1.14.1/distrib/jsxgraphcore.js',
+        src_css = 'https://cdn.jsdelivr.net/npm/jsxgraph@^1.14.1/distrib/jsxgraph.css',
         src_mjx = 'https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-svg.js'
     }
 

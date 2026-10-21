@@ -19,6 +19,12 @@
 - A reusable free-placement editor for simple undirected graphs.
 - Works **globally** or **per page** in your Quarto project.
 
+**Requires JSXGraph 1.14.1 or later.** The default URLs load the newest 1.x
+release that is at least 1.14.1, and the bundled offline copy is 1.14.1. The
+extension has no workarounds for older versions; if you load an older JSXGraph
+through `src_jxg`, you do so at your own risk (the page then logs a warning to
+the browser console).
+
 ---
 
 ## Getting Started
@@ -103,8 +109,8 @@ filters:
 | `iframe_id`    | Adds `id="frame_id"` to the `<iframe>` containing the JSXGraph illustration.   | —        |
 | `out`          | Static export with `svg`; interactive html export with `js`.                   | `js`     |
 | `reload`       | Shows a reload button.                                                         | `false`  |
-| `src_css`      | URL or local path to `jsxgraph.css`.                                          | jsDelivr, latest JSXGraph 1.x |
-| `src_jxg`      | URL or local path to `jsxgraphcore.js`.                                       | jsDelivr, latest JSXGraph 1.x |
+| `src_css`      | URL or local path to `jsxgraph.css`.                                          | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
+| `src_jxg`      | URL or local path to `jsxgraphcore.js`.                                       | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
 | `src_mjx`      | Path to the MathJax file.                                                      | jsDelivr, latest MathJax 4.x |
 | `style`        | Custom CSS (e.g. `border: 5px solid red; border-radius: 10px;`).               | `none`   |
 | `textwidth`    | Absolute textwidth  (e.g. `15.5cm`, `5in`).                                    | `20cm`   |
@@ -167,9 +173,9 @@ from its parent window. The parent application remains responsible for
 validating responses, enforcing timeouts and size limits, and deciding whether
 AI-oriented data may leave the browser.
 
-The same protocol accepts a `layout` notification from the parent. This
-refreshes all boards after a hidden or collapsed iframe becomes visible, so
-JSXGraph can recompute its canvas dimensions. See the complete request,
+The same protocol still accepts a `layout` notification from the parent. It
+needs no action any more: JSXGraph's own resize observer sizes the boards when
+a hidden or collapsed iframe becomes visible. See the complete request,
 response, error, AI-data, and layout protocol in
 [the graph editor and assessment API reference](docs/graph-editor.md).
 
@@ -202,9 +208,10 @@ options, and host integration contract are documented in
 ## Asset loading
 
 Interactive output uses the jsDelivr JSXGraph JavaScript and CSS URLs by
-default, from the latest JSXGraph 1.x release (a new major version is never
-picked up silently). A project can set `src_jxg` and `src_css` to other HTTP(S) URLs, which
-are preserved as supplied, or to local paths, which are embedded as data URLs.
+default, from the newest JSXGraph 1.x release that is at least 1.14.1
+(`jsxgraph@^1.14.1`; a new major version is never picked up silently). A
+project can set `src_jxg` and `src_css` to other HTTP(S) URLs, which are
+preserved as supplied, or to local paths, which are embedded as data URLs.
 The bundled resources therefore remain available for self-contained or offline
 projects when selected explicitly.
 
@@ -228,17 +235,13 @@ Check out a working example: [example.qmd](example.qmd).
   own resize observer then sizes the board when it is shown and follows its
   container on any later resize (window, tab, mobile width); the container
   keeps its CSS size, so the board narrows with the page. The extension adds
-  three things JSXGraph does not do: a board created while hidden gets, when
+  two things JSXGraph does not do: a board created while hidden gets, when
   first shown, the view it would have had if created visible at that size
   (`boundingbox`, `keepaspectratio`, `unitX`/`unitY` with `originX`/`originY`,
-  or a view its code set meanwhile); a `keepaspectratio` board with a
+  or a view its code set meanwhile); and a `keepaspectratio` board with a
   `boundingbox` shows its whole view at any width (JSXGraph's own rule keeps
-  one side and may crop the other on a narrow screen); and each board
-  re-reads its size shortly after the iframe is shown or resized (JSXGraph
-  1.9.2 to 1.14.0 can keep a stale size then; fixed in 1.14.1). With JSXGraph
-  1.14.0 or older this re-read also keeps a board following its container
-  after an error in board code has stopped JSXGraph's resize observer (1.14.1
-  no longer stops it). Boards need no resize code of their own.
+  one side and may crop the other on a narrow screen). Boards need no resize
+  code of their own.
 - **Known limits.** The navigation bar's home button (`zoom100`) uses
   JSXGraph's rule, so on a narrow screen it may crop a `keepaspectratio`
   board that the resize had fitted. A `keepaspectratio` board set up with
@@ -247,17 +250,14 @@ Check out a working example: [example.qmd](example.qmd).
   for a board that has never been shown returns an empty picture (the
   board has no size yet). Board code with its own resize handling (e.g.
   `setBoundingBox(box, true)` on every resize) decides the view itself.
-- **JSXGraph version.** Use JSXGraph 1.13.2 or later (the default resolves to
-  the newest 1.x release). In 1.13.0 and 1.13.1, a `functiongraph` with an
-  interval throws when created in a hidden tab, which stops the rest of the
-  board code. JSXGraph 1.14.1 fixes, in JSXGraph itself, the blank board after
-  a hidden tab is shown (87935dee), the view of a hidden `keepaspectratio`
-  board (3ccdebe7), a possible endless loop in the SVG renderer (99c11a02) and
-  the resize observer that one error during a resize stopped for good
-  (0a79254a); the default URL picks it up. Still open in JSXGraph, and covered
-  by the extension: a board with `unitX`/`originX` created hidden gets a wrong
-  view. The bundled offline copy (`jsxgraphcore.js` and `jsxgraph.css`) is
-  JSXGraph 1.14.1.
+- **JSXGraph version.** The extension requires JSXGraph 1.14.1 or later;
+  older versions are not supported and have no workarounds here. JSXGraph
+  1.14.1 fixes the blank board after a hidden tab is shown, the view of a
+  hidden `keepaspectratio` board, a possible endless loop in the SVG renderer
+  and the resize observer that one error during a resize stopped for good.
+  Still open in JSXGraph 1.14.1, and covered by the extension: a board with
+  `unitX`/`originX` created hidden gets a wrong view. The bundled offline copy
+  (`jsxgraphcore.js` and `jsxgraph.css`) is JSXGraph 1.14.1.
 
 ---
 

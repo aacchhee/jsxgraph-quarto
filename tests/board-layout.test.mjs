@@ -1,10 +1,10 @@
 // The generated iframe runs the board code inline and unchanged, sets
 // window.BOARDID in the bridge script before it, and leaves resizing to
-// JSXGraph's own resize observer. The bridge adds three things, tested here
-// with a small stand-in for JSXGraph's Board: a board created while hidden
-// gets its intended view when first shown, a keepaspectratio board shows its
-// whole view at any width (axis directions and zoom factors kept), and boards
-// re-read their size after the iframe's resize event.
+// JSXGraph's own resize observer (JSXGraph 1.14.1 or later). The bridge adds
+// two things, tested here with a small stand-in for JSXGraph's Board: a board
+// created while hidden gets its intended view when first shown, and a
+// keepaspectratio board shows its whole view at any width (axis directions and
+// zoom factors kept). It also warns when JSXGraph is older than 1.14.1.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -27,9 +27,8 @@ function bridgeSource(assessmentId = 'a1', boardId = 'JXGbox') {
 // JSXGraph does; setBoundingBox with keepaspectratio keeps the vertical
 // extent (JSXGraph's rule for a landscape container) and resets the zoom
 // factors unless told 'keep'; resizeContainer re-applies the current box.
-function setup() {
-  const listeners = {};
-  const timers = [];
+function setup(version = '1.14.1') {
+  const warnings = [];
   class Board {
     constructor(w, h, attr) {
       Object.assign(this, {canvasWidth: w, canvasHeight: h, attr, keepaspectratio: !!attr.keepaspectratio,
@@ -57,9 +56,17 @@ function setup() {
       return this;
     },
     moveOrigin(x, y) { this.origin.scrCoords = [1, x, y]; return this; },
+    // As JSXGraph 1.14.1: a board created hidden has no valid view; at the
+    // first size it is initialised from the boundingbox attribute, then resized.
     updateContainerDims(w, h) {
       if (w === undefined) { w = this.containerObj.clientWidth; h = this.containerObj.clientHeight; }
       if (!(w > 0 && h > 0)) return this;
+      if (Number.isNaN(this.box[0])) {
+        const bb = this.attr.boundingbox;
+        this.canvasWidth = w; this.canvasHeight = h;
+        this.box = this.keepaspectratio ? initFit(bb, w, h) : bb.slice();
+        this.origin.scrCoords = [1, w / 2, h / 2];
+      }
       this.resizeContainer(w, h, true);
       return this;
     },
@@ -70,7 +77,7 @@ function setup() {
     const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
     return [cx - hx, cy + hy, cx + hx, cy - hy];
   }
-  const JXG = {boards: {}, Board, JSXGraph: {}};
+  const JXG = {boards: {}, Board, JSXGraph: {}, version};
   let n = 0;
   JXG.JSXGraph.initBoard = (id, attr) => {
     const container = context.__container;
@@ -81,10 +88,9 @@ function setup() {
     return board;
   };
   const context = {
-    JXG, console,
+    JXG, console: {warn: (...a) => warnings.push(a)},
     document: {readyState: 'complete'},
-    setTimeout: (f) => timers.push(f),
-    addEventListener: (type, f) => (listeners[type] = listeners[type] || []).push(f),
+    addEventListener() {},
     __container: {clientWidth: 0, clientHeight: 0},
   };
   context.window = context;
@@ -93,13 +99,12 @@ function setup() {
   vm.runInContext(bridgeSource(), context);
   return {
     context,
+    warnings,
     board(code) { return vm.runInContext(code, context); },
-    // The iframe gets a new size: JSXGraph's observer and the bridge's resize handler run.
+    // The iframe gets a new size: JSXGraph's resize observer runs.
     resize(w, h) {
       context.__container.clientWidth = w; context.__container.clientHeight = h;
       for (const b of Object.values(JXG.boards)) b.updateContainerDims(w, h);
-      (listeners.resize || []).forEach((f) => f());
-      while (timers.length) timers.shift()();
     },
   };
 }
@@ -117,11 +122,25 @@ test('the board code is inserted unchanged; BOARDID comes from the bridge script
   assert.equal(page.context.id, 'JXGbox');
 });
 
-test("JSXGraph's resize observer stays on; no fixed pixel size", () => {
+test("JSXGraph's resize observer stays on; no fixed pixel size, no own resize refresh", () => {
   assert.doesNotMatch(lua, /resize\.enabled = false/);
   assert.doesNotMatch(lua, /resizeContainer\(width, height\)/);
-  assert.match(lua, /window\.addEventListener\('resize', refreshBoards\)/);
-  assert.match(lua, /src_jxg = 'https:\/\/cdn\.jsdelivr\.net\/npm\/jsxgraph@1\/distrib\/jsxgraphcore\.js'/);
+  assert.doesNotMatch(lua, /refreshBoards/);
+  assert.doesNotMatch(lua, /board\.updateContainerDims = /);
+});
+
+test('the default JSXGraph URLs stay on 1.x and guarantee 1.14.1 or later', () => {
+  assert.match(lua, /src_jxg = 'https:\/\/cdn\.jsdelivr\.net\/npm\/jsxgraph@\^1\.14\.1\/distrib\/jsxgraphcore\.js'/);
+  assert.match(lua, /src_css = 'https:\/\/cdn\.jsdelivr\.net\/npm\/jsxgraph@\^1\.14\.1\/distrib\/jsxgraph\.css'/);
+});
+
+test('a JSXGraph older than 1.14.1 gets one console warning; 1.14.1 and later get none', () => {
+  for (const old of ['1.14.0', '1.13.3', '1.2.3']) {
+    const page = setup(old);
+    assert.equal(page.warnings.length, 1, old);
+    assert.match(page.warnings[0][0], /requires JSXGraph 1\.14\.1 or later; this page loads /);
+  }
+  for (const ok of ['1.14.1', '1.14.1-dev', '1.15.0', '2.0.0']) assert.equal(setup(ok).warnings.length, 0, ok);
 });
 
 test('a keepaspectratio board shows its whole box when narrowed, and the same view when widened', () => {
@@ -163,21 +182,15 @@ test("a user's zoom survives narrowing and widening, zoom factors included", () 
 
 test('a board created while hidden gets, when shown, the view its code asked for', () => {
   const page = setup();
+  const keep = page.board("JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [0, 6, 14, 0], keepaspectratio: true})");
   const variant = page.board("var v = JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [0, 4, 4, 0]}); v.setBoundingBox([10, 14, 18, 10], false); v");
   const units = page.board("JXG.JSXGraph.initBoard(BOARDID, {originX: 50, originY: 120, unitX: 30, unitY: 20})");
   page.resize(600, 300);
   assert.ok(near(variant.getBoundingBox(), [10, 14, 18, 10]));
   assert.deepEqual(units.origin.scrCoords.slice(1), [50, 120]);
-});
-
-test('an error while re-reading a size is reported once per board', () => {
-  const page = setup();
-  page.context.__container.clientWidth = 600; page.context.__container.clientHeight = 300;
-  const b = page.board("JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [0, 4, 4, 0]})");
-  b.updateContainerDims = (w) => { if (w === undefined) throw new Error('boom'); };
-  const warnings = [];
-  page.context.console = {warn: (...a) => warnings.push(a)};
-  page.resize(500, 300);
-  page.resize(400, 300);
-  assert.equal(warnings.length, 1);
+  assert.ok(contains(keep.getBoundingBox(), [0, 6, 14, 0]));
+  page.resize(273, 150);
+  assert.ok(contains(keep.getBoundingBox(), [0, 6, 14, 0]), 'whole box when narrow');
+  assert.ok(near(variant.getBoundingBox(), [10, 14, 18, 10]));
+  assert.deepEqual(units.origin.scrCoords.slice(1), [50, 120]);
 });

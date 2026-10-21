@@ -85,8 +85,8 @@ var editor = JXG.QuartoGraphEditor.create({board: board});
 
 Editors made by `createBoard()` also expose `resize()`, which synchronizes
 JSXGraph with the visible container. The editor's own `ResizeObserver` and
-initial animation frames call it; JSXGraph's resize observer, the iframe's
-resize event and the parent layout notification resize the board as well.
+initial animation frames call it; JSXGraph's resize observer resizes the board
+as well.
 
 ## Graph response
 
@@ -220,7 +220,7 @@ Errors keep the same response envelope and set `error` instead of `payload`:
 
 ### Layout notification
 
-A parent that reveals, expands, or resizes an iframe should send:
+A parent may send this when it reveals, expands, or resizes an iframe:
 
 ```json
 {
@@ -231,10 +231,10 @@ A parent that reveals, expands, or resizes an iframe should send:
 }
 ```
 
-Shortly afterwards, the iframe makes every JSXGraph board re-read its
-container's size, as it does on its own `resize` event. JSXGraph's resize
-observer normally handles this already; the message is a fallback for hosts
-that reveal or resize the iframe. It does not produce a response message.
+The iframe accepts the message but does nothing: JSXGraph's resize observer
+(JSXGraph 1.14.1 or later) already sizes every board when the iframe is shown
+or resized. Hosts written for earlier versions of this protocol may keep
+sending it. It does not produce a response message.
 
 ## Host responsibilities
 
@@ -243,7 +243,6 @@ The parent integration should:
 - match responses by iframe window, `assessmentId`, and `requestId`;
 - enforce timeouts and payload or image size limits;
 - validate response schemas before grading or storage;
-- send `layout` whenever hidden content becomes visible;
 - request AI data only when needed; and
 - obtain appropriate consent and apply its own policy before response,
   summary, or image data leaves the browser.
