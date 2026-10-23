@@ -23,8 +23,7 @@ const frameHTML = `<!DOCTYPE html><html><head><meta charset="utf-8">${config}
       (function speech() {
         const node = document.querySelector('[data-semantic-speech-none], [data-semantic-speech]');
         const text = node && (node.getAttribute('data-semantic-speech-none') || node.getAttribute('data-semantic-speech'));
-        if (text || performance.now() > until)
-          parent.postMessage({kind: 'svg', ms, origin: self.origin, speech: text || null}, '*');
+        if (text || performance.now() > until) later(ms, text || null);
         else setTimeout(speech, 100);
       })();
     }
@@ -32,6 +31,19 @@ const frameHTML = `<!DOCTYPE html><html><head><meta charset="utf-8">${config}
       mathjax: typeof MathJax === 'object' ? MathJax.version : null}, '*');
     else setTimeout(poll, 100);
   })();
+  // After the first SVG: does MathJax's startup promise settle, and can a
+  // formula added later still be typeset? Each is given 10 s.
+  function within(promise) {
+    return Promise.race([promise.then(() => 'resolved', e => 'rejected: ' + String(e)),
+      new Promise(r => setTimeout(() => r('pending after 10 s'), 10000))]);
+  }
+  async function later(ms, speech) {
+    const startup = await within(MathJax.startup.promise);
+    const p = document.createElement('p'); p.textContent = '\\\\(y^3\\\\)'; document.body.append(p);
+    const typeset = await within(MathJax.typesetPromise([p]));
+    const laterSvg = !!p.querySelector('mjx-container svg');
+    parent.postMessage({kind: 'svg', ms, origin: self.origin, speech, startup, typeset, laterSvg}, '*');
+  }
 <\/script></head><body><p>\\(x^2+1\\)</p></body></html>`;
 const result = document.getElementById('result');
 result.textContent = `Waiting… (crossOriginIsolated=${self.crossOriginIsolated}, speech ${speechOff ? 'off' : 'on'})`;

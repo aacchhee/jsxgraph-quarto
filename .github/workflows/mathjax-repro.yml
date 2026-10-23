@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.55.1-noble
+      options: --user 1001
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -29,7 +30,7 @@ jobs:
           import json
           for r in json.load(open('result.json')):
               res = r['result'] or {}
-              print(f"::notice title={r['browser']} {r['version']} {r['page']} speech={r['speech']}::{res.get('kind')} speech={res.get('speech')!r} isolated={res.get('crossOriginIsolated')} errors={r['errors'][:2]} state={r.get('frameState')} logs={r.get('logs')}")
+              print(f"::notice title={r['browser']} {r['version']} {r['page']} speech={r['speech']}::{res.get('kind')} speech={res.get('speech')!r} startup={res.get('startup')} later={res.get('typeset')}/{res.get('laterSvg')} isolated={res.get('crossOriginIsolated')} errors={r['errors'][:2]} state={r.get('frameState')} logs={r.get('logs')}")
           PY
       - uses: actions/upload-artifact@v4
         if: always()

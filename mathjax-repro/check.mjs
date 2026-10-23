@@ -13,7 +13,7 @@ for (const name of (process.env.BROWSERS || 'chromium').split(',')) {
     const logs = [];
     p.on('console', m => logs.push(m.type() + ': ' + m.text().slice(0, 160)));
     p.on('requestfailed', r => logs.push('requestfailed: ' + r.url().slice(0, 100) + ' ' + (r.failure() || {}).errorText));
-    await p.waitForFunction(() => window.__result, null, {timeout: 40000}).catch(() => {});
+    await p.waitForFunction(() => window.__result, null, {timeout: 60000}).catch(() => {});
     const result = await p.evaluate(() => window.__result || null);
     let frameState = null;
     if (!result) {
