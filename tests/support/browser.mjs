@@ -13,6 +13,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { cleanup } from './render.mjs';
 
 export async function loadPlaywright() {
   const spec = process.env.JXG_TEST_PLAYWRIGHT || 'playwright';
@@ -42,13 +43,19 @@ export const CTM = {
   sha256: '81642e45028f35eab27b7be2cbce427efb9395799b9e335e834c667315fd5b61'
 };
 
-// Buffer of the fixture, or {error} if it cannot be fetched or does not match.
+// Buffer of the fixture, or {error} if it cannot be fetched (the test is then skipped).
+// A file named explicitly by CTM_OPAQUE_ADAPTOR that is unreadable or whose SHA-256
+// differs is an error that fails the tests, not a skip.
 export function fetchCtmAdaptor() {
   let bytes;
   if (process.env.CTM_OPAQUE_ADAPTOR) {
     bytes = readFileSync(process.env.CTM_OPAQUE_ADAPTOR);
-  } else {
-    const dir = mkdtempSync(join(tmpdir(), 'jsxgraph-ctm-'));
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    if (sha256 !== CTM.sha256) throw new Error('CTM_OPAQUE_ADAPTOR has SHA-256 ' + sha256 + ', expected ' + CTM.sha256);
+    return { bytes };
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'jsxgraph-ctm-'));
+  try {
     const run = (args) => spawnSync('git', args, { cwd: dir, encoding: 'buffer', maxBuffer: 1 << 26 });
     if (run(['init', '-q']).status !== 0) return { error: 'git init failed' };
     const fetch = run(['fetch', '-q', '--depth', '1', CTM.repository, CTM.commit]);
@@ -56,7 +63,7 @@ export function fetchCtmAdaptor() {
     const show = run(['show', 'FETCH_HEAD:' + CTM.path]);
     if (show.status !== 0) return { error: 'git show failed: ' + show.stderr.toString().trim() };
     bytes = show.stdout;
-  }
+  } finally { cleanup(dir); }
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   if (sha256 !== CTM.sha256) return { error: 'SHA-256 mismatch: ' + sha256 };
   return { bytes };

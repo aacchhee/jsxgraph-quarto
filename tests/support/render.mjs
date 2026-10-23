@@ -11,6 +11,8 @@ export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '
 export const extensionDir = join(repoRoot, '_extensions', 'jsxgraph');
 
 // The commit this feature was added on top of; unconfigured output must not differ from it.
+// The test of unchanged output needs this commit in the git clone, so it skips (with a
+// message) after a squash or rebase of the branch, or in a shallow clone.
 export const BASE_COMMIT = '21c5f9cabcd434f2f79f93e08adaf41aafb727a8';
 
 export function findQuarto() {
@@ -80,7 +82,7 @@ export function cleanup(...dirs) {
   for (const d of dirs) {
     if (!d) continue;
     const name = basename(d);
-    if (dirname(resolve(d)) !== resolve(tmpdir()) || !/^jsxgraph-(rev|render|ctm|dir)-/.test(name)) {
+    if (dirname(resolve(d)) !== resolve(tmpdir()) || !/^jsxgraph-(rev|render|ctm)-/.test(name)) {
       throw new Error('refusing to remove ' + d);
     }
     rmSync(d, { recursive: true, force: true });

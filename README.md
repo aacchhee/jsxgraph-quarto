@@ -109,8 +109,8 @@ filters:
 | `iframe_id`    | Adds `id="frame_id"` to the `<iframe>` containing the JSXGraph illustration.   | —        |
 | `out`          | Static export with `svg`; interactive html export with `js`.                   | `js`     |
 | `reload`       | Shows a reload button.                                                         | `false`  |
-| `src_css`      | URL or local path to `jsxgraph.css`.                                          | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
-| `src_jxg`      | URL or local path to `jsxgraphcore.js`.                                       | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
+| `src_css`      | URL of `jsxgraph.css`; any other value selects the bundled copy (interactive output). | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
+| `src_jxg`      | URL of `jsxgraphcore.js`; any other value selects the bundled copy (interactive output). | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
 | `src_mjx`      | Path to the MathJax file.                                                      | jsDelivr, latest MathJax 4.x |
 | `src_mjx_preload` | URL or local path of a script that runs before the MathJax script (interactive output only; see [Configuring MathJax before it loads](#configuring-mathjax-before-it-loads)). | none |
 | `style`        | Custom CSS (e.g. `border: 5px solid red; border-radius: 10px;`).               | `none`   |
@@ -212,15 +212,16 @@ Interactive output uses the jsDelivr JSXGraph JavaScript and CSS URLs by
 default, from the newest JSXGraph 1.x release that is at least 1.14.1
 (`jsxgraph@^1.14.1`; a new major version is never picked up silently). A
 project can set `src_jxg` and `src_css` to other HTTP(S) URLs, which are
-preserved as supplied, or to local paths, which are embedded as data URLs.
-The bundled resources therefore remain available for self-contained or offline
-projects when selected explicitly.
+preserved as supplied. Any other value (a local path, say) selects the bundled
+copy of `jsxgraphcore.js` and `jsxgraph.css`, which is embedded as a data URL;
+the path itself is not read. The bundled resources therefore remain available
+for self-contained or offline projects when selected explicitly.
 
 ## Configuring MathJax before it loads
 
 MathJax reads its configuration, `window.MathJax`, when its script runs, and
 that script is loaded asynchronously in the head of each board's `<iframe>`;
-board code and `src_jxg` run later. To configure MathJax, set `src_mjx_preload`
+board code and `src_jxg` are not guaranteed to run before it. To configure MathJax, set `src_mjx_preload`
 to a script that sets `window.MathJax` (or does anything else that must happen
 first). The script is added as an ordinary synchronous `<script>` in the head,
 directly before the unchanged MathJax script, so it has run to completion when
@@ -262,8 +263,10 @@ setting off for that board):
   the paths tried.
 - **Escaping.** The value is escaped for the HTML attribute (`&`, `"`, `<`,
   `>`); it is not otherwise changed. As for every option, a value in the
-  document metadata is read as Markdown, so write a double quote there as `\"`
-  (a block attribute takes the value as written).
+  document metadata is read as Markdown, so typography applies there: quotes
+  become curly quotes, `--` an en dash, `...` an ellipsis, and apostrophes
+  change. A double quote can be written `\"`; for a URL with such characters
+  it is safer to use a block attribute, which takes the value as written.
 - **Unset or empty.** Nothing is added; the generated frame is the same as
   without the option.
 - **Scope.** The option applies to interactive output (`out: js`) only. The
