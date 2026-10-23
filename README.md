@@ -112,6 +112,7 @@ filters:
 | `src_css`      | URL or local path to `jsxgraph.css`.                                          | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
 | `src_jxg`      | URL or local path to `jsxgraphcore.js`.                                       | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
 | `src_mjx`      | Path to the MathJax file.                                                      | jsDelivr, latest MathJax 4.x |
+| `src_mjx_preload` | URL or local path of a script that runs before the MathJax script (interactive output only; see [Configuring MathJax before it loads](#configuring-mathjax-before-it-loads)). | none |
 | `style`        | Custom CSS (e.g. `border: 5px solid red; border-radius: 10px;`).               | `none`   |
 | `textwidth`    | Absolute textwidth  (e.g. `15.5cm`, `5in`).                                    | `20cm`   |
 | `unit`         | Unit for `width`and `height` (e.g. `px`, `em`, `rem`, `cm`, `mm`, `in`, `pt`). | `px`     |
@@ -214,6 +215,59 @@ project can set `src_jxg` and `src_css` to other HTTP(S) URLs, which are
 preserved as supplied, or to local paths, which are embedded as data URLs.
 The bundled resources therefore remain available for self-contained or offline
 projects when selected explicitly.
+
+## Configuring MathJax before it loads
+
+MathJax reads its configuration, `window.MathJax`, when its script runs, and
+that script is loaded asynchronously in the head of each board's `<iframe>`;
+board code and `src_jxg` run later. To configure MathJax, set `src_mjx_preload`
+to a script that sets `window.MathJax` (or does anything else that must happen
+first). The script is added as an ordinary synchronous `<script>` in the head,
+directly before the unchanged MathJax script, so it has run to completion when
+MathJax starts. `src_mjx` is not wrapped or changed: MathJax keeps its URL,
+`id="MathJax-script"`, `async` and its own load event.
+
+For example, `mathjax-config.js`:
+
+```javascript
+window.MathJax = {
+  options: { enableMenu: false }
+};
+```
+
+set for the whole document:
+
+```yaml
+jsxgraph:
+  src_mjx_preload: mathjax-config.js
+```
+
+or for one board (an empty value, `src_mjx_preload=""`, switches a global
+setting off for that board):
+
+````
+```{.jsxgraph src_mjx_preload="mathjax-config.js"}
+...
+```
+````
+
+- **URLs.** A value starting with `http://` or `https://` (or a `data:` URL) is
+  linked as given. Any other scheme is an error.
+- **Local files.** Any other value is a path to a local file. A relative path
+  is looked up in the directory of the document being rendered first, then in
+  the project directory; an absolute path is used as it is. The file is read
+  while rendering and embedded as a `data:text/javascript;base64,...` URL, so
+  the output stays self-contained and works inside the sandboxed frame. If the
+  file cannot be found, the render fails with a message naming the option and
+  the paths tried.
+- **Escaping.** The value is escaped for the HTML attribute (`&`, `"`, `<`,
+  `>`); it is not otherwise changed. As for every option, a value in the
+  document metadata is read as Markdown, so write a double quote there as `\"`
+  (a block attribute takes the value as written).
+- **Unset or empty.** Nothing is added; the generated frame is the same as
+  without the option.
+- **Scope.** The option applies to interactive output (`out: js`) only. The
+  static `svg` export does not use it.
 
 ## Demo
 

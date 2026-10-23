@@ -145,6 +145,85 @@ local function loadBase64Files()
     if not CSS_BASE64 then CSS_BASE64 = 'data:text/css;base64,' .. quarto.base64.encode(ioRead(joinPath(extension_dir,"resources","css","jsxgraph.css"))) end
 end
 
+-- Pre-loader script for the interactive iframe (option src_mjx_preload)
+local PRELOAD_CACHE = {}
+
+-- Stop the render with a message. Quarto replaces the global error() by a
+-- function that only logs, so the render would go on; assert() really raises.
+local function failRender(message)
+    assert(false, message)
+end
+
+local function trim(s)
+    return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function escapeHtmlAttribute(s)
+    return (s:gsub("&", "&amp;"):gsub('"', "&quot;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
+end
+
+-- Read a file byte for byte; nil and a reason if it cannot be read
+local function readBinary(file)
+    local ioFile, err = io.open(file, "rb")
+    if not ioFile then return nil, err or "cannot open" end
+    local content, rerr = ioFile:read("*a")
+    ioFile:close()
+    if not content then return nil, rerr or "cannot read" end
+    return content
+end
+
+-- Directories searched for a relative local path: the directory of the input
+-- document first, then the project directory (when there is a project)
+local function preloadSearchDirs()
+    local dirs = {}
+    local input = quarto.doc and quarto.doc.input_file
+    if not input and PANDOC_STATE and PANDOC_STATE.input_files then input = PANDOC_STATE.input_files[1] end
+    if type(input) == "string" and input ~= "" then
+        local d = pandoc.path.directory(input)
+        if d == "" then d = "." end
+        dirs[#dirs + 1] = d
+    end
+    local project = quarto.project and quarto.project.directory
+    if type(project) == "string" and project ~= "" then dirs[#dirs + 1] = project end
+    if #dirs == 0 then dirs[1] = "." end
+    return dirs
+end
+
+-- The src of the pre-loader script: http(s) and data URLs as given, a local
+-- file embedded as a data URL. Returns nil if the option is unset or empty.
+local function resolvePreloadSrc(value)
+    if type(value) ~= "string" then return nil end
+    value = trim(value)
+    if value == "" then return nil end
+
+    local scheme = value:match("^(%a[%w+.-]+):")
+    if scheme then
+        scheme = scheme:lower()
+        if scheme == "http" or scheme == "https" or scheme == "data" then return value end
+        failRender("JSXGraph: option src_mjx_preload must be an http(s) or data URL or a local file path, not '" .. value .. "'")
+    end
+
+    local candidates = {}
+    if pandoc.path.is_absolute(value) then
+        candidates[1] = value
+    else
+        for _, dir in ipairs(preloadSearchDirs()) do
+            candidates[#candidates + 1] = pandoc.path.normalize(pandoc.path.join({dir, value}))
+        end
+    end
+
+    for _, file in ipairs(candidates) do
+        if PRELOAD_CACHE[file] then return PRELOAD_CACHE[file] end
+        local content = readBinary(file)
+        if content then
+            PRELOAD_CACHE[file] = 'data:text/javascript;base64,' .. quarto.base64.encode(content)
+            return PRELOAD_CACHE[file]
+        end
+    end
+    failRender("JSXGraph: option src_mjx_preload: cannot read the local file '" .. value ..
+          "' (looked for: " .. table.concat(candidates, ", ") .. ")")
+end
+
 -- Render JSXGraph
 local function renderJsxgraph(globalOptions)
 
@@ -730,12 +809,19 @@ board%s.reload = function() { window.location.reload(); };
 })();
 ]], assessment_id, id)
 
+            -- Optional synchronous pre-loader, run before the MathJax script
+            local preload_tag = ''
+            local preload_src = resolvePreloadSrc(options.src_mjx_preload)
+            if preload_src then
+                preload_tag = '<script src="' .. escapeHtmlAttribute(preload_src) .. '"></script>\n'
+            end
+
             local icontent = string.format([[
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script id="MathJax-script" async src="%s"></script>
+%s<script id="MathJax-script" async src="%s"></script>
 <script src="%s"></script>
 <style>@import url("%s");</style>
 <style>html,body{margin:0;padding:0;width:100%%;height:100%%;}.jxgbox{border:none;border-radius:0px;}</style>
@@ -746,7 +832,7 @@ board%s.reload = function() { window.location.reload(); };
 <script>%s</script>
 <script>%s</script>
 </body>
-</html>]], options.src_mjx, options.src_jxg, options.src_css, id, assessment_bridge, GRAPH_EDITOR_JS, jsxgraph)
+</html>]], preload_tag, options.src_mjx, options.src_jxg, options.src_css, id, assessment_bridge, GRAPH_EDITOR_JS, jsxgraph)
 
             local jsx_b64 = 'data:text/html;base64,' .. quarto.base64.encode(icontent)
             local iframe = '<iframe src="'..jsx_b64..'" class="'..options.class..'" name="iframe'..id..'"'
