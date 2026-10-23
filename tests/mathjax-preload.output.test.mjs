@@ -57,6 +57,7 @@ test('an unset, empty or blank option gives the same frame as no option', { skip
   } finally { cleanup(none.dir, ...variants.map((r) => r.dir), perBlock.dir); }
 });
 
+// Needs BASE_COMMIT (see tests/support/render.mjs) in the git clone; skipped without it.
 test('unconfigured documents render byte-identically to the base commit (board ids normalised)', { skip: skip || false }, (t) => {
   const baseRev = extensionAtRevision(BASE_COMMIT);
   if (!baseRev) { t.skip('commit ' + BASE_COMMIT + ' is not in this git clone'); return; }
@@ -66,7 +67,7 @@ test('unconfigured documents render byte-identically to the base commit (board i
       'src_jxg: https://example.test/jxg.js', 'src_css: https://example.test/jxg.css', 'reload: true', 'assessment_id: fixed-id'],
     [{ attrs: 'echo=true', code: BOARD }, { attrs: 'unit="%" width=50', code: 'var b = JXG.JSXGraph.initBoard("x", {axis: true});' }]),
     'bundled.qmd': qmd(['src_jxg: bundled', 'src_css: bundled'], [{ attrs: '', code: BOARD }, { attrs: 'out=js', code: BOARD }]),
-    'static.qmd': qmd(null).replace('filters: [jsxgraph]', 'filters: [jsxgraph]\nformat: html')
+    'format-html.qmd': qmd(null).replace('filters: [jsxgraph]', 'filters: [jsxgraph]\nformat: html')
   };
   const heads = [], bases = [];
   try {

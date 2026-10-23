@@ -5,15 +5,21 @@
 // origin) inside a parent page that is cross-origin isolated (COOP/COEP). MathJax
 // 4 is served from a local HTTP server as a custom, linked src_mjx.
 //
-// Asserted for a pre-loader that is a local file (embedded) and for one that is
-// a linked URL: the pre-loader ran in the frame's head before MathJax existed
-// and before MathJax started; the original MathJax script keeps its attributes
-// and its own load event sees the MathJax version and startup.defaultReady;
-// MathJax's configuration from the pre-loader is used; SVG output, speech and
-// braille are produced; no page error, console error or failed request.
-// A third case uses CTM's real MathJax adaptor as an external fixture (fetched
-// at test time, hash checked, never stored here) and checks the opaque-frame
-// speech worker path with it.
+// Cases per browser (MathJax 4.1.3 exactly):
+//  - control, no option: no element is added; reports what native MathJax does here
+//  - pre-loader as a local file (embedded) and as a linked URL, speech and braille
+//    switched off: the pre-loader ran in the frame's head before MathJax existed and
+//    before it started; the original MathJax script keeps its attributes and its own
+//    load event sees the MathJax version and startup.defaultReady; the pre-loader's
+//    MathJax configuration is used; SVG output; no worker; no page error, console
+//    error or failed request. These cases assert no speech or braille.
+//  - pre-loader that leaves speech and braille on: they are produced. Runs only where
+//    the control found native MathJax speech working (Chromium and Firefox in the
+//    tested setup); skipped by design in WebKit.
+//  - CTM's MathJax adaptor as pre-loader: speech and braille in all browsers, from a
+//    worker made from a data: URL. This is an external fixture: a hash-pinned script
+//    of Erasmus-CTM/ctm-libs, fetched over the network at test time (or taken from
+//    CTM_OPAQUE_ADAPTOR), never stored here; the case is skipped when unavailable.
 //
 // Prerequisites: see tests/support/browser.mjs (Quarto, Playwright with browsers,
 // MATHJAX_DIR, JXG_TEST_BROWSERS). Without them the tests are skipped with a
@@ -32,6 +38,7 @@ const EXPECTED_BRAILLE = '⠭⠘⠆⠐⠬⠂'; // x^2+1
 
 const quarto = findQuarto();
 const playwright = await loadPlaywright();
+const EXPECTED_MATHJAX_VERSION = '4.1.3';
 const mathjax = findMathJax();
 const browserNames = (process.env.JXG_TEST_BROWSERS || 'chromium').split(',').map((s) => s.trim()).filter(Boolean);
 const missing = !quarto ? 'Quarto not found (set QUARTO or put quarto on the PATH)'
@@ -190,7 +197,7 @@ async function defineTests() {
     };
     const assertNativeLoader = (r) => {
       assert.deepEqual({ src: r.state.nativeLoader.src, version: r.state.nativeLoader.version, readyMethod: r.state.nativeLoader.readyMethod },
-        { src: mathjaxUrl, version: mathjax.version, readyMethod: 'function' }, 'the original script\'s own load event sees MathJax ' + mathjax.version);
+        { src: mathjaxUrl, version: EXPECTED_MATHJAX_VERSION, readyMethod: 'function' }, 'the original script\'s own load event sees MathJax ' + EXPECTED_MATHJAX_VERSION);
       assert.deepEqual(r.dom.mathjaxAttributes, ['async', 'id', 'src'], 'MathJax script keeps id, async and src only');
     };
     const assertPreloaderPlaced = (r, scheme) => {
@@ -228,7 +235,7 @@ async function defineTests() {
         assert.equal(p.typeofMathJax, 'undefined', 'MathJax did not exist yet when the pre-loader ran');
         assert.ok(p.at < r.state.nativeLoader.at, 'pre-loader ran before the MathJax script finished loading');
         assert.ok(p.readyAt > p.at, 'startup.ready from the pre-loader\'s configuration ran, after the pre-loader');
-        assert.equal(p.readyVersion, mathjax.version);
+        assert.equal(p.readyVersion, EXPECTED_MATHJAX_VERSION);
         assert.equal(r.state.marker, 'configured', 'MathJax uses the configuration set by the pre-loader');
         assert.deepEqual(r.state.speechOptions, { enableSpeech: false, enableBraille: false }, 'speech and braille options from the pre-loader are in effect');
         assert.deepEqual(r.state.workers, [], 'no speech worker is started');
@@ -239,7 +246,7 @@ async function defineTests() {
 
     test(engine + ': pre-loader that leaves speech and braille on: strings are produced where native MathJax works in an opaque frame', { skip, timeout: 240000 }, async (t) => {
       if (native === null) { t.skip('control case did not run'); return; }
-      if (!native) { t.skip('native MathJax speech does not work in an opaque frame in ' + engine + ' (see the control case); the adaptor case covers this browser'); return; }
+      if (!native) { t.skip('native MathJax speech did not work in ' + engine + ' in this setup (opaque frame in a cross-origin-isolated parent; see the control case); the adaptor case covers this browser'); return; }
       const r = await run(engine, 'embedded-speech');
       common(r);
       assertPreloaderPlaced(r, 'data:');
@@ -270,6 +277,10 @@ async function defineTests() {
 
 if (missing) {
   test('browser tests of src_mjx_preload', { skip: missing }, () => {});
+} else if (mathjax.version !== EXPECTED_MATHJAX_VERSION) {
+  test('MathJax version', () => {
+    assert.fail('MATHJAX_DIR holds MathJax ' + mathjax.version + '; these tests are written for ' + EXPECTED_MATHJAX_VERSION + ' (npm install mathjax@' + EXPECTED_MATHJAX_VERSION + ')');
+  });
 } else {
   await defineTests();
 }
