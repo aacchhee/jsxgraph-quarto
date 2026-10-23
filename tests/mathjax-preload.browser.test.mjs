@@ -39,12 +39,15 @@ const missing = !quarto ? 'Quarto not found (set QUARTO or put quarto on the PAT
   : !mathjax ? 'MathJax not found (npm install mathjax@4.1.3 and set MATHJAX_DIR to node_modules/mathjax)'
   : null;
 
-// The test-owned generic pre-loader: records what the page looks like when it runs,
-// and configures MathJax (a marker option, and a startup.ready hook that records its time).
-const PROBE_PRELOAD = `(function () {
+// The test-owned generic pre-loader: records what the page looks like when it runs, and
+// configures MathJax: a marker option, a startup.ready hook that records its time and, if
+// speech is false, speech and braille off (so no MathJax worker is needed, which is what
+// keeps this pre-loader independent of how a browser treats workers in opaque frames).
+const probePreload = (speech) => `(function () {
   window.__preload = { at: performance.now(), typeofMathJax: typeof MathJax, scripts: document.scripts.length };
   window.MathJax = {
     jxgPreloadMarker: 'configured',
+    ${speech ? '' : 'options: { enableSpeech: false, enableBraille: false, menuOptions: { settings: { speech: false, braille: false } } },'}
     startup: { ready: function () {
       window.__preload.readyAt = performance.now();
       window.__preload.readyVersion = MathJax.version;
@@ -53,6 +56,7 @@ const PROBE_PRELOAD = `(function () {
   };
 })();
 `;
+const PROBE_PRELOAD = probePreload(false);
 
 const BOARD = String.raw`var board = JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [-5, 5, 5, -5], axis: true});
 var label = board.create('text', [-3, 3, '\\(x^2+1\\)'], {useMathJax: true, fontSize: 20});
@@ -92,15 +96,16 @@ async function defineTests() {
     return r.frames[0];
   }
   const cases = {
-    control: { frame: renderCase('control', []), preload: false },
-    embedded: { frame: renderCase('embedded', ['src_mjx_preload: probe-preload.js'], { 'probe-preload.js': PROBE_PRELOAD }), preload: true, probe: true },
-    linked: { frame: renderCase('linked', ['src_mjx_preload: ' + origin + '/probe-preload.js']), preload: true, probe: true }
+    control: { frame: renderCase('control', []) },
+    embedded: { frame: renderCase('embedded', ['src_mjx_preload: probe-preload.js'], { 'probe-preload.js': PROBE_PRELOAD }) },
+    linked: { frame: renderCase('linked', ['src_mjx_preload: ' + origin + '/probe-preload.js']) },
+    'embedded-speech': { frame: renderCase('embedded-speech', ['src_mjx_preload: probe-preload.js'], { 'probe-preload.js': probePreload(true) }) }
   };
   if (!ctm.error) {
-    cases['ctm-adaptor'] = { frame: renderCase('ctm-adaptor', ['src_mjx_preload: mathjax-opaque-adaptor.js'], { 'mathjax-opaque-adaptor.js': ctm.bytes }), preload: true, adaptor: true };
+    cases['ctm-adaptor'] = { frame: renderCase('ctm-adaptor', ['src_mjx_preload: mathjax-opaque-adaptor.js'], { 'mathjax-opaque-adaptor.js': ctm.bytes }) };
   }
 
-  async function run(engine, name, { expectSpeech = true } = {}) {
+  async function run(engine, name, { startupTimeout = 60000, tolerateStall = false } = {}) {
     const browser = await playwright[engine].launch({ headless: true });
     const context = await browser.newContext({ viewport: { width: 900, height: 700 } });
     await context.addInitScript(installHarness);
@@ -121,9 +126,8 @@ async function defineTests() {
       const frame = page.frames().find((f) => f.parentFrame() === page.mainFrame());
       result.sandbox = await page.evaluate(() => document.querySelector('iframe').getAttribute('sandbox'));
       result.srcScheme = await page.evaluate(() => document.querySelector('iframe').getAttribute('src').slice(0, 22));
-      await frame.waitForFunction(() => !!(window.MathJax && MathJax.startup && MathJax.startup.promise), null, { timeout: 60000 });
-      await withinDeadline(frame.evaluate(() => MathJax.startup.promise), 60000, 'MathJax startup');
-      await frame.waitForFunction(() => Object.keys(window.JXG && JXG.boards || {}).length > 0, null, { timeout: 30000 });
+      // What the frame's head looks like, before MathJax has started
+      await frame.waitForFunction(() => !!document.getElementById('MathJax-script'), null, { timeout: 30000 });
       result.dom = await frame.evaluate(() => {
         const mj = document.getElementById('MathJax-script');
         const before = mj.previousElementSibling;
@@ -137,6 +141,14 @@ async function defineTests() {
         };
       });
       try {
+        await frame.waitForFunction(() => !!(window.MathJax && MathJax.startup && MathJax.startup.promise), null, { timeout: startupTimeout });
+        await withinDeadline(frame.evaluate(() => MathJax.startup.promise), startupTimeout, 'MathJax startup');
+        await frame.waitForFunction(() => Object.keys(window.JXG && JXG.boards || {}).length > 0, null, { timeout: 30000 });
+      } catch (error) {
+        if (!tolerateStall) throw error;
+        result.stalled = error.message.split('\n')[0];
+      }
+      if (!result.stalled) try {
         result.renderer = await withinDeadline(frame.evaluate(async () => {
           const node = await MathJax.tex2svgPromise('x^2+1');
           const svg = node.querySelector('svg');
@@ -145,14 +157,16 @@ async function defineTests() {
         }), 30000, 'MathJax SVG');
       } catch (error) { result.renderer = { svg: false, error: error.message }; }
       // The board's own MathJax text, typeset by JSXGraph through the page's MathJax
-      try {
+      if (!result.stalled) try {
         await frame.waitForFunction(() => document.querySelector('.jxgbox mjx-container svg, .jxgbox svg mjx-container, .jxgbox mjx-container'), null, { timeout: 15000 });
         result.boardMath = true;
       } catch { result.boardMath = false; }
       result.state = await frame.evaluate(() => ({
         origin: self.origin, preload: window.__preload || null, nativeLoader: window.__nativeLoader || null,
-        marker: MathJax.config && MathJax.config.jxgPreloadMarker, workers: window.__workers.slice(),
-        version: MathJax.version
+        marker: window.MathJax && MathJax.config && MathJax.config.jxgPreloadMarker, workers: window.__workers.slice(),
+        version: window.MathJax && MathJax.version,
+        speechOptions: window.MathJax && MathJax.startup && MathJax.startup.document && MathJax.startup.document.options ? {
+          enableSpeech: MathJax.startup.document.options.enableSpeech, enableBraille: MathJax.startup.document.options.enableBraille } : null
       }));
       await page.waitForTimeout(1500); // late errors
     } finally { await browser.close(); }
@@ -162,7 +176,7 @@ async function defineTests() {
   for (const engine of browserNames) {
     const launchable = playwright[engine];
     const skip = launchable ? false : 'unknown browser ' + engine;
-    const common = (r, item) => {
+    const common = (r) => {
       assert.equal(r.topIsolated, true, 'parent page is cross-origin isolated');
       assert.equal(r.sandbox, 'allow-scripts');
       assert.equal(r.srcScheme, 'data:text/html;base64,');
@@ -187,23 +201,24 @@ async function defineTests() {
       assert.equal(r.dom.scriptsBeforeMathJax, 1, 'exactly one pre-loader before MathJax');
     };
 
-    test(engine + ': control without src_mjx_preload (diagnostic: native transport in this browser)', { skip, timeout: 240000 }, async (t) => {
-      const r = await run(engine, 'control');
-      // Not a requirement of the extension: shows what MathJax does natively in an opaque frame here.
-      t.diagnostic(JSON.stringify({ engine, svg: r.renderer.svg, speech: r.renderer.speech, braille: r.renderer.braille,
-        errors: r.errors.length, consoleErrors: r.consoleErrors, failedRequests: r.failedRequests }));
+    // What MathJax does in an opaque frame in this browser without any pre-loader. Not a
+    // requirement of the extension; it says whether the native speech worker can work here
+    // (WebKit blocks it, and MathJax's SVG conversion then stalls).
+    let native = null;
+    test(engine + ': control without src_mjx_preload: no element is added; native MathJax in this browser (diagnostic)', { skip, timeout: 240000 }, async (t) => {
+      const r = await run(engine, 'control', { startupTimeout: 25000, tolerateStall: true });
+      native = !r.stalled && r.renderer && r.renderer.svg === true && r.renderer.speech === EXPECTED_SPEECH && r.renderer.braille === EXPECTED_BRAILLE;
+      t.diagnostic(JSON.stringify({ engine, nativeWorks: native, stalled: r.stalled || false, renderer: r.renderer || null,
+        errors: r.errors, consoleErrors: r.consoleErrors, failedRequests: r.failedRequests }));
       assert.equal(r.dom.scriptsBeforeMathJax, 0, 'no pre-loader element when the option is not set');
-      assert.equal(r.state.preload, null);
-      assertNativeLoader(r);
+      assert.deepEqual(r.dom.mathjaxAttributes, ['async', 'id', 'src']);
       assert.equal(r.topIsolated, true);
       assert.equal(r.state.origin, 'null');
-      assert.equal(r.renderer.svg, true, 'SVG output');
-      const nativeSpeech = r.renderer.speech === EXPECTED_SPEECH && r.renderer.braille === EXPECTED_BRAILLE;
-      cases.control.nativeSpeech = nativeSpeech;
+      assert.equal(r.state.preload, null);
     });
 
     for (const name of ['embedded', 'linked']) {
-      test(engine + ': pre-loader ' + (name === 'embedded' ? 'from a local file (embedded)' : 'from a URL (linked)') + ' runs before MathJax; SVG, speech and braille', { skip, timeout: 240000 }, async (t) => {
+      test(engine + ': pre-loader from ' + (name === 'embedded' ? 'a local file (embedded)' : 'a URL (linked)') + ' runs before MathJax and configures it; SVG output, no worker', { skip, timeout: 240000 }, async () => {
         const r = await run(engine, name);
         common(r);
         assertPreloaderPlaced(r, name === 'embedded' ? 'data:' : 'http:');
@@ -215,20 +230,25 @@ async function defineTests() {
         assert.ok(p.readyAt > p.at, 'startup.ready from the pre-loader\'s configuration ran, after the pre-loader');
         assert.equal(p.readyVersion, mathjax.version);
         assert.equal(r.state.marker, 'configured', 'MathJax uses the configuration set by the pre-loader');
+        assert.deepEqual(r.state.speechOptions, { enableSpeech: false, enableBraille: false }, 'speech and braille options from the pre-loader are in effect');
+        assert.deepEqual(r.state.workers, [], 'no speech worker is started');
+        assert.ok(!r.renderer.speech && !r.renderer.braille, 'no speech or braille attached');
         assert.equal(r.boardMath, true, 'the board\'s own MathJax text is typeset');
-        // Speech and braille need MathJax's worker; the generic pre-loader leaves the transport
-        // alone, so they are asserted where the browser's native transport works in an opaque
-        // frame (what the control case found). The adaptor case below asserts them everywhere.
-        const nativeWorks = cases.control.nativeSpeech;
-        t.diagnostic(JSON.stringify({ engine, name, speech: r.renderer.speech, braille: r.renderer.braille, nativeTransportWorksHere: nativeWorks }));
-        if (nativeWorks) {
-          assert.equal(r.renderer.speech, EXPECTED_SPEECH);
-          assert.equal(r.renderer.braille, EXPECTED_BRAILLE);
-        } else {
-          t.diagnostic('speech/braille not asserted here: the native worker is blocked in this browser\'s opaque frame (see the control case)');
-        }
       });
     }
+
+    test(engine + ': pre-loader that leaves speech and braille on: strings are produced where native MathJax works in an opaque frame', { skip, timeout: 240000 }, async (t) => {
+      if (native === null) { t.skip('control case did not run'); return; }
+      if (!native) { t.skip('native MathJax speech does not work in an opaque frame in ' + engine + ' (see the control case); the adaptor case covers this browser'); return; }
+      const r = await run(engine, 'embedded-speech');
+      common(r);
+      assertPreloaderPlaced(r, 'data:');
+      assertNativeLoader(r);
+      assert.equal(r.state.marker, 'configured');
+      assert.equal(r.renderer.speech, EXPECTED_SPEECH);
+      assert.equal(r.renderer.braille, EXPECTED_BRAILLE);
+      assert.equal(r.boardMath, true);
+    });
 
     test(engine + ': CTM adaptor as pre-loader (external fixture): worker transport, speech and braille in the opaque frame', { skip: skip || (ctm.error ? 'CTM adaptor not available: ' + ctm.error : false), timeout: 240000 }, async () => {
       const r = await run(engine, 'ctm-adaptor');
