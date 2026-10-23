@@ -1,0 +1,38 @@
+name: MathJax opaque-frame reproduction
+on:
+  push:
+    branches: [ci/2026-10-mathjax-issue-repro]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.55.1-noble
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm init -y >/dev/null && npm install --no-audit --no-fund playwright@1.55.1
+      - name: Run reproduction (MathJax 4.1.3 from jsDelivr)
+        working-directory: mathjax-repro
+        run: |
+          python3 serve.py 8765 &
+          sleep 2
+          PW_ROOT="$GITHUB_WORKSPACE/node_modules" BROWSERS=${{ matrix.browser }} node check.mjs http://127.0.0.1:8765 > result.json
+          cat result.json
+          python3 - <<'PY'
+          import json
+          for r in json.load(open('result.json')):
+              res = r['result'] or {}
+              print(f"::notice title={r['browser']} {r['version']} {r['page']} speech={r['speech']}::{res.get('kind')} speech={res.get('speech')!r} isolated={res.get('crossOriginIsolated')} errors={r['errors'][:2]}")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: repro-${{ matrix.browser }}
+          path: mathjax-repro/result.json
