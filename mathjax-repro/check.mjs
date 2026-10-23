@@ -10,9 +10,19 @@ for (const name of (process.env.BROWSERS || 'chromium').split(',')) {
     const errors = [];
     p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
     await p.goto(`${base}/${page}.html?speech=${speech}${mjx ? '&mjx=' + encodeURIComponent(mjx) : ''}`);
-    await p.waitForFunction(() => window.__result, null, {timeout: 25000}).catch(() => {});
+    const logs = [];
+    p.on('console', m => logs.push(m.type() + ': ' + m.text().slice(0, 160)));
+    p.on('requestfailed', r => logs.push('requestfailed: ' + r.url().slice(0, 100) + ' ' + (r.failure() || {}).errorText));
+    await p.waitForFunction(() => window.__result, null, {timeout: 40000}).catch(() => {});
     const result = await p.evaluate(() => window.__result || null);
-    out.push({browser: name, version: browser.version(), page, speech, result, errors: errors.slice(0, 3)});
+    let frameState = null;
+    if (!result) {
+      const frame = p.frames()[1];
+      frameState = frame ? await frame.evaluate(() => ({ready: document.readyState, mathjax: typeof MathJax,
+        version: typeof MathJax === 'object' ? MathJax.version : null, svg: !!document.querySelector('mjx-container svg')})).catch(e => String(e)) : 'no frame';
+      frameState = {frameState, parentText: await p.evaluate(() => document.body.innerText.slice(0, 300))};
+    }
+    out.push({browser: name, version: browser.version(), page, speech, result, frameState, errors: errors.slice(0, 3), logs: logs.slice(0, 8)});
     await p.close();
   }
   await browser.close();

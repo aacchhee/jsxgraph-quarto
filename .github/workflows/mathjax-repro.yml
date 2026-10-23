@@ -29,7 +29,7 @@ jobs:
           import json
           for r in json.load(open('result.json')):
               res = r['result'] or {}
-              print(f"::notice title={r['browser']} {r['version']} {r['page']} speech={r['speech']}::{res.get('kind')} speech={res.get('speech')!r} isolated={res.get('crossOriginIsolated')} errors={r['errors'][:2]}")
+              print(f"::notice title={r['browser']} {r['version']} {r['page']} speech={r['speech']}::{res.get('kind')} speech={res.get('speech')!r} isolated={res.get('crossOriginIsolated')} errors={r['errors'][:2]} state={r.get('frameState')} logs={r.get('logs')}")
           PY
       - uses: actions/upload-artifact@v4
         if: always()
