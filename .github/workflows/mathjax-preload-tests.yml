@@ -50,10 +50,27 @@ jobs:
           npm init -y > /dev/null
           npm install --ignore-scripts playwright@1.55.1 mathjax@4.1.3
       - name: Run the tests
+        id: tests
+        continue-on-error: true
         env:
           QUARTO: ${{ runner.temp }}/quarto/bin/quarto
           JXG_TEST_PLAYWRIGHT: ${{ runner.temp }}/deps/node_modules/playwright/index.mjs
           MATHJAX_DIR: ${{ runner.temp }}/deps/node_modules/mathjax
           CTM_OPAQUE_ADAPTOR: ${{ github.workspace }}/.ctm-libs/_extensions/ctm-libs/runtime/mathjax-opaque-adaptor.js
           JXG_TEST_BROWSERS: ${{ matrix.browser }}
-        run: node --test --test-reporter=spec tests/*.test.mjs
+        run: node --test --test-reporter=tap tests/*.test.mjs > "$RUNNER_TEMP/tests.tap" 2>&1
+      - name: Report the test output as annotations
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, re
+          text = open(os.environ['RUNNER_TEMP'] + '/tests.tap', errors='replace').read()
+          keep = [l for l in text.splitlines() if re.match(r'^(not ok|ok|# (tests|pass|fail|skipped)|# \{|  (error|code|duration_ms)|    )', l) or 'SKIP' in l]
+          out = '\n'.join(keep)
+          for n, i in enumerate(range(0, min(len(out), 60000), 3500)):
+              chunk = out[i:i + 3500].replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+              print('::notice title=tap %d::%s' % (n, chunk))
+          PY
+      - name: Fail if the tests failed
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
