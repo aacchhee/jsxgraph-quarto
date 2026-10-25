@@ -19,8 +19,8 @@
 - A reusable free-placement editor for simple undirected graphs.
 - Works **globally** or **per page** in your Quarto project.
 
-**Requires JSXGraph 1.14.1 or later.** The default URLs load the newest 1.x
-release that is at least 1.14.1, and the bundled offline copy is 1.14.1. The
+**Requires JSXGraph 1.14.1 or later.** The default URLs and bundled offline copy use the same
+reproducible upstream 1.15.0-dev Git build; see [its source and recipe](docs/upstream-1.15-runtime.md). The
 extension has no workarounds for older versions; if you load an older JSXGraph
 through `src_jxg`, you do so at your own risk (the page then logs a warning to
 the browser console).
@@ -109,8 +109,8 @@ filters:
 | `iframe_id`    | Adds `id="frame_id"` to the `<iframe>` containing the JSXGraph illustration.   | —        |
 | `out`          | Static export with `svg`; interactive html export with `js`.                   | `js`     |
 | `reload`       | Shows a reload button.                                                         | `false`  |
-| `src_css`      | URL of `jsxgraph.css`; any other value selects the bundled copy (interactive output). | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
-| `src_jxg`      | URL of `jsxgraphcore.js`; any other value selects the bundled copy (interactive output). | jsDelivr, JSXGraph ≥ 1.14.1 (1.x) |
+| `src_css`      | URL of `jsxgraph.css`; any other value selects the bundled copy (interactive output). | jsDelivr, exact Git artifact (1.15.0-dev) |
+| `src_jxg`      | URL of `jsxgraphcore.js`; any other value selects the bundled copy (interactive output). | jsDelivr, exact Git artifact (1.15.0-dev) |
 | `src_mjx`      | Path to the MathJax file.                                                      | jsDelivr, latest MathJax 4.x |
 | `src_mjx_preload` | URL or local path of a script that runs before the MathJax script (interactive output only; see [Configuring MathJax before it loads](#configuring-mathjax-before-it-loads)). | none |
 | `style`        | Custom CSS (e.g. `border: 5px solid red; border-radius: 10px;`).               | `none`   |
@@ -209,8 +209,7 @@ options, and host integration contract are documented in
 ## Asset loading
 
 Interactive output uses the jsDelivr JSXGraph JavaScript and CSS URLs by
-default, from the newest JSXGraph 1.x release that is at least 1.14.1
-(`jsxgraph@^1.14.1`; a new major version is never picked up silently). A
+default, pinned to one immutable Git artifact built from upstream 1.15.0-dev. A
 project can set `src_jxg` and `src_css` to other HTTP(S) URLs, which are
 preserved as supplied. Any other value (a local path, say) selects the bundled
 copy of `jsxgraphcore.js` and `jsxgraph.css`, which is embedded as a data URL;
@@ -312,9 +311,9 @@ Check out a working example: [example.qmd](example.qmd).
   1.14.1 fixes the blank board after a hidden tab is shown, the view of a
   hidden `keepaspectratio` board, a possible endless loop in the SVG renderer
   and the resize observer that one error during a resize stopped for good.
-  Still open in JSXGraph 1.14.1, and covered by the extension: a board with
-  `unitX`/`originX` created hidden gets a wrong view. The bundled offline copy
-  (`jsxgraphcore.js` and `jsxgraph.css`) is JSXGraph 1.14.1.
+  The pinned 1.15.0-dev build also preserves a requested hidden view and
+  restores explicit units and origins when shown. A board that has zero width
+  while hidden still has no drawable picture.
 
 ---
 

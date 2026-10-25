@@ -872,10 +872,10 @@ function Pandoc(doc)
         echo = false,
         unit = 'px',
         reload = false,
-        -- The newest JSXGraph 1.x, and at least 1.14.1 (which the extension
+        -- The reproducible pinned upstream development artifact (the extension
         -- requires); never a new major version. jsDelivr resolves the range.
-        src_jxg = 'https://cdn.jsdelivr.net/npm/jsxgraph@^1.14.1/distrib/jsxgraphcore.js',
-        src_css = 'https://cdn.jsdelivr.net/npm/jsxgraph@^1.14.1/distrib/jsxgraph.css',
+        src_jxg = 'https://cdn.jsdelivr.net/gh/aacchhee/jsxgraph-quarto@5a1847cbcdd22b1f167f5bb9a901d47cb43e3a23/_extensions/jsxgraph/resources/js/jsxgraphcore.js',
+        src_css = 'https://cdn.jsdelivr.net/gh/aacchhee/jsxgraph-quarto@5a1847cbcdd22b1f167f5bb9a901d47cb43e3a23/_extensions/jsxgraph/resources/css/jsxgraph.css',
         src_mjx = 'https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-svg.js'
     }
 
