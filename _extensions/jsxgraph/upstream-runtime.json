@@ -11,7 +11,8 @@
   "webpack": "5.112.0",
   "packageLockSha256": "b55ed22532f5abcce799968e407b1263a4c9d2f15de71c4edd3f276f7891ddff",
   "files": {
-    "resources/js/jsxgraphcore.js": "57f2b8726b9fc4ecdd7b5a7dd1aa2e3b23af045343e21108452cc7a8b2eee5e3",
+    "resources/js/jsxgraphcore.js": "143da46b60b0d97b97bc26579c2705c7ee2d113a70716a10eebfcc225599c9b7",
     "resources/css/jsxgraph.css": "58ff5704eb9bb8db66e8b002d01c44a6ddfe0ced7f887ab2ef602feff2f3c0f6"
-  }
+  },
+  "copyrightHeader": "Upstream COPYRIGHT with the version label set to 1.15.0-dev"
 }
