@@ -15,7 +15,12 @@ A truly hidden percentage-width board still has zero width until shown.
 It has no drawable hidden image. View recovery and hidden-image capture are
 separate capabilities; a blank PNG must not be described as useful context.
 
-This is a built runtime candidate for the CTM runtime pin, not a release.
-The default CDN range is not changed here: an exact artifact URL and the
-umbrella's online/offline pin contract must be selected together. No tag,
-publication or deployment is performed.
+AC approved the pinned Git source for both CDN and offline delivery on 25 Oct.
+The CDN defaults name the immutable built-artifact commit `5a1847cbcdd22b1f167f5bb9a901d47cb43e3a23` in
+`aacchhee/jsxgraph-quarto`; the artifact carries the exact upstream source,
+lockfile, build recipe, file hashes and licence texts. Offline installation
+extracts those same files from that commit's checksum-verified Git archive.
+Run `python scripts/build-upstream-runtime.py --check` with the recorded
+Node version to rebuild and compare every shipped runtime and notice byte.
+The GitHub workflow performs the same check. No source patches, tag,
+publication or deployment are needed.
