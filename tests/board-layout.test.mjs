@@ -129,9 +129,10 @@ test("JSXGraph's resize observer stays on; no fixed pixel size, no own resize re
   assert.doesNotMatch(lua, /board\.updateContainerDims = /);
 });
 
-test('the default JSXGraph URLs stay on 1.x and guarantee 1.14.1 or later', () => {
-  assert.match(lua, /src_jxg = 'https:\/\/cdn\.jsdelivr\.net\/npm\/jsxgraph@\^1\.14\.1\/distrib\/jsxgraphcore\.js'/);
-  assert.match(lua, /src_css = 'https:\/\/cdn\.jsdelivr\.net\/npm\/jsxgraph@\^1\.14\.1\/distrib\/jsxgraph\.css'/);
+test('the default script and CSS use one immutable Git artifact', () => {
+  const script=/src_jxg = '(https:\/\/cdn\.jsdelivr\.net\/gh\/aacchhee\/jsxgraph-quarto@([a-f0-9]{40})\/_extensions\/jsxgraph\/resources\/)js\/jsxgraphcore\.js'/.exec(lua);
+  const css=/src_css = '(https:\/\/cdn\.jsdelivr\.net\/gh\/aacchhee\/jsxgraph-quarto@([a-f0-9]{40})\/_extensions\/jsxgraph\/resources\/)css\/jsxgraph\.css'/.exec(lua);
+  assert.ok(script); assert.ok(css); assert.equal(script[1],css[1]);
 });
 
 test('a JSXGraph older than 1.14.1 gets one console warning; 1.14.1 and later get none', () => {
