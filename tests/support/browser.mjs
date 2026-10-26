@@ -7,6 +7,7 @@
 //   - MathJax 4 from npm, e.g. `npm install --no-save mathjax@4.1.3`: set
 //     MATHJAX_DIR to the installed package folder (node_modules/mathjax)
 //   - JXG_TEST_BROWSERS = comma separated chromium, firefox, webkit (default: chromium)
+//   - CHROMIUM_EXECUTABLE optionally selects a locally installed Chromium
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
