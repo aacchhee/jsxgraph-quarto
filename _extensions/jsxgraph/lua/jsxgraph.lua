@@ -596,8 +596,12 @@ board%s.reload = function() { window.location.reload(); };
     Object.values(JXG.boards || {}).forEach((board) => {
       const container = board.containerObj;
       if (!container) return;
-      const width = container.clientWidth;
-      const height = container.clientHeight;
+      // Measure the iframe viewport, not the container: after the first
++     // resizeContainer() the container has a fixed pixel size.
++     // const width = container.clientWidth;
+      // const height = container.clientHeight;
+      const width = document.documentElement.clientWidth;
++     const height = document.documentElement.clientHeight;
       if (!(width > 0 && height > 0)) return;
       if (typeof board.resizeContainer === 'function' &&
           (Math.abs((board.canvasWidth || 0) - width) > 1 ||
@@ -681,7 +685,7 @@ board%s.reload = function() { window.location.reload(); };
 <script id="MathJax-script" async src="%s"></script>
 <script src="%s"></script>
 <style>@import url("%s");</style>
-<style>html,body{margin:0;padding:0;width:100%%;height:100%%;}.jxgbox{border:none;border-radius:0px;}</style>
+<style>html,body{margin:0;padding:0;width:100%%;height:100%%;overflow:hidden;}.jxgbox{border:none;border-radius:0px;}</style>
 </head>
 <body>
 <div id="%s" class="jxgbox" style="width:100%%;height:100%%;display:block;object-fit:fill;box-sizing:border-box;"></div>
