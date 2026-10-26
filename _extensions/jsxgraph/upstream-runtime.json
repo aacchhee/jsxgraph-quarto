@@ -1,23 +1,26 @@
 {
-  "v": 1,
+  "v": 2,
   "repository": "jsxgraph/jsxgraph",
-  "commit": "a3867ae130323b1bdc182674b03ebbdeb3c8d8f5",
-  "runtimeVersion": "1.15.0-dev",
-  "build": [
-    "npm ci --ignore-scripts",
-    "npm run buildCore"
-  ],
-  "node": "24.19.0",
-  "webpack": "5.112.0",
-  "packageLockSha256": "b55ed22532f5abcce799968e407b1263a4c9d2f15de71c4edd3f276f7891ddff",
-  "files": {
-    "resources/js/jsxgraphcore.js": "143da46b60b0d97b97bc26579c2705c7ee2d113a70716a10eebfcc225599c9b7",
-    "resources/css/jsxgraph.css": "58ff5704eb9bb8db66e8b002d01c44a6ddfe0ced7f887ab2ef602feff2f3c0f6",
-    "resources/upstream/LICENSE.MIT": "43e325001487de7f09745fbe086b054bb1b70d4ab58060e87153849365b23ff1",
-    "resources/upstream/LICENSE.LGPL": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
-    "resources/upstream/COPYRIGHT": "ad5ddf359c14c9b84872d2cc7008b5e98dd2ab9186883119d48d14eb59175ef6"
+  "tag": "v1.14.2",
+  "commit": "ecc97f951ad0ed2acfffbad68706e40683635721",
+  "runtimeVersion": "1.14.2",
+  "npm": {
+    "package": "jsxgraph",
+    "version": "1.14.2",
+    "tarball": "https://registry.npmjs.org/jsxgraph/-/jsxgraph-1.14.2.tgz",
+    "integrity": "sha512-OqhkRB5Qcp8dxe5ff9qdG1v/4yLrw2HDcApBoeZWRa3IzLSdIA8TXPwjspsM1XvEcV/eTPwsUFe1aiYejV2TLw=="
   },
-  "copyrightHeader": "Upstream COPYRIGHT with the version label set to 1.15.0-dev",
-  "sourceArchiveSha256": "82964c6088d27aa0b8c3c789e34d7ab1f65e4f62faadbef5139e668f51ee549d",
-  "recipe": "scripts/build-upstream-runtime.py"
+  "sources": {
+    "resources/js/jsxgraphcore.js": "package/distrib/jsxgraphcore.js",
+    "resources/css/jsxgraph.css": "package/distrib/jsxgraph.css",
+    "resources/upstream/LICENSE.MIT": "package/LICENSE.MIT",
+    "resources/upstream/LICENSE.LGPL": "package/LICENSE.LGPL"
+  },
+  "files": {
+    "resources/js/jsxgraphcore.js": "7cd005c139b63c5e2562df08dc5fe7c813b0c40438054941564a3453b4edd9b0",
+    "resources/css/jsxgraph.css": "6b2ec1a1f794afbfe0677a921b2314765f0e5fc9773196ac4a4f8f6cc257fc3f",
+    "resources/upstream/LICENSE.MIT": "43e325001487de7f09745fbe086b054bb1b70d4ab58060e87153849365b23ff1",
+    "resources/upstream/LICENSE.LGPL": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+  },
+  "recipe": "scripts/fetch-upstream-runtime.py"
 }

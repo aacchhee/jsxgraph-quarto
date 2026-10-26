@@ -677,28 +677,23 @@ board%s.reload = function() { window.location.reload(); };
     return boards.length ? boards[0] : null;
   }
 
-  // The extension requires JSXGraph 1.14.1 or later and has no workarounds
+  // The extension requires JSXGraph 1.14.2 or later and has no workarounds
   // for older versions (a src_jxg that loads one is used at the user's own risk).
   try {
     const v = String(JXG.version).split('.').map((n) => parseInt(n, 10));
-    if (v[0] === 1 && (v[1] < 14 || (v[1] === 14 && v[2] < 1))) {
-      console.warn('The jsxgraph Quarto extension requires JSXGraph 1.14.1 or later; this page loads ' + JXG.version + '.');
+    if (v[0] === 1 && (v[1] < 14 || (v[1] === 14 && v[2] < 2))) {
+      console.warn('The jsxgraph Quarto extension requires JSXGraph 1.14.2 or later; this page loads ' + JXG.version + '.');
     }
   } catch (error) { /* no version to check */ }
 
   // JSXGraph's own ResizeObserver resizes each board with its container (a
-  // tab or collapsed block shown, a narrower window). Two gaps remain:
-  //
-  // 1. A board created while the iframe is hidden has no size, so JSXGraph
-  //    cannot set its view yet: when shown, a board set up with unitX/unitY
-  //    and originX/originY gets infinite units (still open in 1.14.1), and a
-  //    view the code set meanwhile is lost. Such a board keeps the view its
-  //    code asks for and gets it at its first real size, as if created
-  //    visible at that size.
-  // 2. On resizing, JSXGraph keeps a keepaspectratio board's vertical extent
-  //    and crops the sides when the container narrows. Such a board shows the
-  //    whole view its code, the user (zoom, pan) or initBoard set, fitted
-  //    with one scale and centred, as initBoard does.
+  // tab or collapsed block shown, a narrower window), and since 1.14.2 a
+  // board created while hidden gets the view its code asked for when shown.
+  // One gap remains (still open in 1.14.2): on resizing, JSXGraph keeps a
+  // keepaspectratio board's vertical extent and crops the sides when the
+  // container gets narrower than the box. Such a board shows the whole view
+  // its code, the user (zoom, pan) or initBoard set, fitted with one scale
+  // and centred, as initBoard does.
   function fit(box, width, height) {  // keeps the direction of each axis
     const dx = box[2] - box[0], dy = box[1] - box[3];
     const scale = Math.min(width / Math.abs(dx), height / Math.abs(dy));
@@ -709,9 +704,8 @@ board%s.reload = function() { window.location.reload(); };
   const finite = (box) => Array.isArray(box) && box.length === 4 && box.every(Number.isFinite);
   const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 1e-9 * Math.max(1, Math.abs(v)));
   function keepView(board) {
-    const proto = JXG.Board.prototype, attr = board.attr;
-    const origin = board.origin.scrCoords.slice(1);
-    let view = attr.unitx || attr.unity ? null : attr.boundingbox.slice();
+    const proto = JXG.Board.prototype;
+    let view = board.attr.boundingbox.slice();
     let shown = board.canvasWidth > 0 && board.canvasHeight > 0, last = board.getBoundingBox(), own = false;
     board.setBoundingBox = function (box) {
       if (!own && finite(box)) view = box.slice();
@@ -720,18 +714,14 @@ board%s.reload = function() { window.location.reload(); };
       return this;
     };
     board.resizeContainer = function (w, h, dontset, dontSetBoundingBox) {
-      if (dontSetBoundingBox || !(w > 0 && h > 0) || (shown && !this.keepaspectratio)) return proto.resizeContainer.apply(this, arguments);
-      const current = this.getBoundingBox(), keep = this.keepaspectratio;
+      if (dontSetBoundingBox || !(w > 0 && h > 0) || !this.keepaspectratio) return proto.resizeContainer.apply(this, arguments);
+      const current = this.getBoundingBox();
       if (shown && finite(current) && !same(current, last)) view = current.slice();  // panned since
       proto.resizeContainer.call(this, w, h, dontset, true);
       own = true;
       try {
-        if (view) {
-          this.setBoundingBox(keep ? fit(view, w, h) : view, false, 'keep');  // keeps the zoom factors
-          this.keepaspectratio = keep;
-        } else {
-          this.moveOrigin(origin[0], origin[1]);
-        }
+        this.setBoundingBox(fit(view, w, h), false, 'keep');  // keeps the zoom factors
+        this.keepaspectratio = true;
       } finally { own = false; }
       shown = true;
       last = this.getBoundingBox();
@@ -743,7 +733,7 @@ board%s.reload = function() { window.location.reload(); };
     JXG.JSXGraph.initBoard = function () {
       const board = initBoard.apply(this, arguments);
       try {
-        if (board.origin && (board.keepaspectratio || !(board.canvasWidth > 0 && board.canvasHeight > 0))) keepView(board);
+        if (board.keepaspectratio && !(board.attr.unitx || board.attr.unity)) keepView(board);
       } catch (error) { /* keep the board usable */ }
       return board;
     };
@@ -872,10 +862,10 @@ function Pandoc(doc)
         echo = false,
         unit = 'px',
         reload = false,
-        -- The reproducible pinned upstream development artifact (the extension
-        -- requires); never a new major version. jsDelivr resolves the range.
-        src_jxg = 'https://cdn.jsdelivr.net/gh/aacchhee/jsxgraph-quarto@5a1847cbcdd22b1f167f5bb9a901d47cb43e3a23/_extensions/jsxgraph/resources/js/jsxgraphcore.js',
-        src_css = 'https://cdn.jsdelivr.net/gh/aacchhee/jsxgraph-quarto@5a1847cbcdd22b1f167f5bb9a901d47cb43e3a23/_extensions/jsxgraph/resources/css/jsxgraph.css',
+        -- Exactly the released JSXGraph 1.14.2 that the extension requires and
+        -- bundles (the same files as the offline copy).
+        src_jxg = 'https://cdn.jsdelivr.net/npm/jsxgraph@1.14.2/distrib/jsxgraphcore.js',
+        src_css = 'https://cdn.jsdelivr.net/npm/jsxgraph@1.14.2/distrib/jsxgraph.css',
         src_mjx = 'https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-svg.js'
     }
 
