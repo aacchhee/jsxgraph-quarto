@@ -1,10 +1,11 @@
 // The generated iframe runs the board code inline and unchanged, sets
 // window.BOARDID in the bridge script before it, and leaves resizing to
-// JSXGraph's own resize observer (JSXGraph 1.14.1 or later). The bridge adds
-// two things, tested here with a small stand-in for JSXGraph's Board: a board
-// created while hidden gets its intended view when first shown, and a
-// keepaspectratio board shows its whole view at any width (axis directions and
-// zoom factors kept). It also warns when JSXGraph is older than 1.14.1.
+// JSXGraph's own resize observer (JSXGraph 1.14.2 or later, which also gives a
+// board created while hidden its intended view). The bridge adds one thing,
+// tested here with a small stand-in for JSXGraph's Board: a keepaspectratio
+// board shows its whole view at any width (axis directions and zoom factors
+// kept). It also warns when JSXGraph is older than 1.14.2. The real runtime
+// is tested in upstream-runtime.browser.test.mjs.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -27,7 +28,7 @@ function bridgeSource(assessmentId = 'a1', boardId = 'JXGbox') {
 // JSXGraph does; setBoundingBox with keepaspectratio keeps the vertical
 // extent (JSXGraph's rule for a landscape container) and resets the zoom
 // factors unless told 'keep'; resizeContainer re-applies the current box.
-function setup(version = '1.14.1') {
+function setup(version = '1.14.2') {
   const warnings = [];
   class Board {
     constructor(w, h, attr) {
@@ -56,8 +57,8 @@ function setup(version = '1.14.1') {
       return this;
     },
     moveOrigin(x, y) { this.origin.scrCoords = [1, x, y]; return this; },
-    // As JSXGraph 1.14.1: a board created hidden has no valid view; at the
-    // first size it is initialised from the boundingbox attribute, then resized.
+    // A board created hidden has no valid view; at the first size it is
+    // initialised from the boundingbox attribute, then resized.
     updateContainerDims(w, h) {
       if (w === undefined) { w = this.containerObj.clientWidth; h = this.containerObj.clientHeight; }
       if (!(w > 0 && h > 0)) return this;
@@ -129,19 +130,18 @@ test("JSXGraph's resize observer stays on; no fixed pixel size, no own resize re
   assert.doesNotMatch(lua, /board\.updateContainerDims = /);
 });
 
-test('the default script and CSS use one immutable Git artifact', () => {
-  const script=/src_jxg = '(https:\/\/cdn\.jsdelivr\.net\/gh\/aacchhee\/jsxgraph-quarto@([a-f0-9]{40})\/_extensions\/jsxgraph\/resources\/)js\/jsxgraphcore\.js'/.exec(lua);
-  const css=/src_css = '(https:\/\/cdn\.jsdelivr\.net\/gh\/aacchhee\/jsxgraph-quarto@([a-f0-9]{40})\/_extensions\/jsxgraph\/resources\/)css\/jsxgraph\.css'/.exec(lua);
-  assert.ok(script); assert.ok(css); assert.equal(script[1],css[1]);
+test('the default script and CSS are exactly the bundled release, JSXGraph 1.14.2', () => {
+  assert.match(lua, /src_jxg = 'https:\/\/cdn\.jsdelivr\.net\/npm\/jsxgraph@1\.14\.2\/distrib\/jsxgraphcore\.js'/);
+  assert.match(lua, /src_css = 'https:\/\/cdn\.jsdelivr\.net\/npm\/jsxgraph@1\.14\.2\/distrib\/jsxgraph\.css'/);
 });
 
-test('a JSXGraph older than 1.14.1 gets one console warning; 1.14.1 and later get none', () => {
-  for (const old of ['1.14.0', '1.13.3', '1.2.3']) {
+test('a JSXGraph older than 1.14.2 gets one console warning; 1.14.2 and later get none', () => {
+  for (const old of ['1.14.1', '1.14.0', '1.13.3', '1.2.3']) {
     const page = setup(old);
     assert.equal(page.warnings.length, 1, old);
-    assert.match(page.warnings[0][0], /requires JSXGraph 1\.14\.1 or later; this page loads /);
+    assert.match(page.warnings[0][0], /requires JSXGraph 1\.14\.2 or later; this page loads /);
   }
-  for (const ok of ['1.14.1', '1.14.1-dev', '1.15.0', '2.0.0']) assert.equal(setup(ok).warnings.length, 0, ok);
+  for (const ok of ['1.14.2', '1.14.2-dev', '1.15.0', '2.0.0']) assert.equal(setup(ok).warnings.length, 0, ok);
 });
 
 test('a keepaspectratio board shows its whole box when narrowed, and the same view when widened', () => {
@@ -181,17 +181,38 @@ test("a user's zoom survives narrowing and widening, zoom factors included", () 
   assert.equal(b.zoomY, 1.5625);
 });
 
-test('a board created while hidden gets, when shown, the view its code asked for', () => {
+test('a keepaspectratio board created while hidden shows its whole box when shown and when narrowed', () => {
   const page = setup();
   const keep = page.board("JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [0, 6, 14, 0], keepaspectratio: true})");
-  const variant = page.board("var v = JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [0, 4, 4, 0]}); v.setBoundingBox([10, 14, 18, 10], false); v");
-  const units = page.board("JXG.JSXGraph.initBoard(BOARDID, {originX: 50, originY: 120, unitX: 30, unitY: 20})");
   page.resize(600, 300);
-  assert.ok(near(variant.getBoundingBox(), [10, 14, 18, 10]));
-  assert.deepEqual(units.origin.scrCoords.slice(1), [50, 120]);
   assert.ok(contains(keep.getBoundingBox(), [0, 6, 14, 0]));
   page.resize(273, 150);
   assert.ok(contains(keep.getBoundingBox(), [0, 6, 14, 0]), 'whole box when narrow');
-  assert.ok(near(variant.getBoundingBox(), [10, 14, 18, 10]));
-  assert.deepEqual(units.origin.scrCoords.slice(1), [50, 120]);
+});
+
+test("the home button (zoom100's call) shows the whole initial box on a narrow board", () => {
+  const page = setup();
+  page.context.__container.clientWidth = 600; page.context.__container.clientHeight = 150;
+  const b = page.board("JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [0, 6, 14, 0], keepaspectratio: true})");
+  page.resize(273, 150);
+  b.zoomX = b.zoomY = 1.5625;
+  b.setBoundingBox([4, 4, 12, 2], true, 'update');
+  b.setBoundingBox(b.attr.boundingbox, b.keepaspectratio, 'reset');  // what JSXGraph's zoom100 calls
+  assert.ok(contains(b.getBoundingBox(), [0, 6, 14, 0]), 'whole box: ' + b.getBoundingBox());
+  assert.equal(b.zoomX, 1);
+  assert.equal(b.keepaspectratio, true);
+  b.setBoundingBox([0, 6, 14, 0], true, 'reset');  // a copy from board code keeps JSXGraph's rule
+  assert.ok(!contains(b.getBoundingBox(), [0, 6, 14, 0]), 'board code decides: ' + b.getBoundingBox());
+});
+
+test('boards without keepaspectratio, or set up with units, are left to JSXGraph', () => {
+  const page = setup();
+  page.context.__container.clientWidth = 600; page.context.__container.clientHeight = 300;
+  const proto = page.context.JXG.Board.prototype;
+  const plain = page.board("JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [0, 4, 4, 0]})");
+  const units = page.board("JXG.JSXGraph.initBoard(BOARDID, {originX: 50, originY: 120, unitX: 30, unitY: 20, keepaspectratio: true})");
+  for (const board of [plain, units]) {
+    assert.equal(board.setBoundingBox, proto.setBoundingBox);
+    assert.equal(board.resizeContainer, proto.resizeContainer);
+  }
 });

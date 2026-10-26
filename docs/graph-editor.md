@@ -232,7 +232,7 @@ A parent may send this when it reveals, expands, or resizes an iframe:
 ```
 
 The iframe accepts the message but does nothing: JSXGraph's resize observer
-(JSXGraph 1.14.1 or later) already sizes every board when the iframe is shown
+(JSXGraph 1.14.2 or later) already sizes every board when the iframe is shown
 or resized. Hosts written for earlier versions of this protocol may keep
 sending it. It does not produce a response message.
 
