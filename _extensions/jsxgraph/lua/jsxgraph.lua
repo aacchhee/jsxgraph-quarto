@@ -597,11 +597,11 @@ board%s.reload = function() { window.location.reload(); };
       const container = board.containerObj;
       if (!container) return;
       // Measure the iframe viewport, not the container: after the first
-+     // resizeContainer() the container has a fixed pixel size.
-+     // const width = container.clientWidth;
+      // resizeContainer() the container has a fixed pixel size.
+      // const width = container.clientWidth;
       // const height = container.clientHeight;
       const width = document.documentElement.clientWidth;
-+     const height = document.documentElement.clientHeight;
+      const height = document.documentElement.clientHeight;
       if (!(width > 0 && height > 0)) return;
       if (typeof board.resizeContainer === 'function' &&
           (Math.abs((board.canvasWidth || 0) - width) > 1 ||
