@@ -24,8 +24,10 @@ unreleased 1.15.0-dev (`a3867ae`), is no longer needed: the rest of
 Still open in 1.14.2: when a `keepaspectratio` board's container gets
 narrower than the box, JSXGraph keeps the vertical extent and crops the
 sides. For example, `boundingbox: [0, 6, 14, 0]` at 600×150 px, narrowed to
-273×150 px, shows x 1.54…12.46 instead of 0…14. The extension still fits
-such a board's whole view; the browser test checks both sides of this.
+273×150 px, shows x 1.54…12.46 instead of 0…14, and the navigation bar's
+home button (`zoom100`) crops it the same way. The extension still fits such
+a board's whole view on resize and on the home button; the browser tests
+check both sides of this.
 
 A truly hidden percentage-width board still has zero width until shown and
 has no drawable hidden image. View recovery and hidden-image capture are

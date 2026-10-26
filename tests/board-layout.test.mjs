@@ -190,6 +190,21 @@ test('a keepaspectratio board created while hidden shows its whole box when show
   assert.ok(contains(keep.getBoundingBox(), [0, 6, 14, 0]), 'whole box when narrow');
 });
 
+test("the home button (zoom100's call) shows the whole initial box on a narrow board", () => {
+  const page = setup();
+  page.context.__container.clientWidth = 600; page.context.__container.clientHeight = 150;
+  const b = page.board("JXG.JSXGraph.initBoard(BOARDID, {boundingbox: [0, 6, 14, 0], keepaspectratio: true})");
+  page.resize(273, 150);
+  b.zoomX = b.zoomY = 1.5625;
+  b.setBoundingBox([4, 4, 12, 2], true, 'update');
+  b.setBoundingBox(b.attr.boundingbox, b.keepaspectratio, 'reset');  // what JSXGraph's zoom100 calls
+  assert.ok(contains(b.getBoundingBox(), [0, 6, 14, 0]), 'whole box: ' + b.getBoundingBox());
+  assert.equal(b.zoomX, 1);
+  assert.equal(b.keepaspectratio, true);
+  b.setBoundingBox([0, 6, 14, 0], true, 'reset');  // a copy from board code keeps JSXGraph's rule
+  assert.ok(!contains(b.getBoundingBox(), [0, 6, 14, 0]), 'board code decides: ' + b.getBoundingBox());
+});
+
 test('boards without keepaspectratio, or set up with units, are left to JSXGraph', () => {
   const page = setup();
   page.context.__container.clientWidth = 600; page.context.__container.clientHeight = 300;

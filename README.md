@@ -295,11 +295,10 @@ Check out a working example: [example.qmd](example.qmd).
   code asked for (`boundingbox`, `unitX`/`unitY` with `originX`/`originY`, or
   a view its code set meanwhile). The extension adds one thing JSXGraph does
   not do: a `keepaspectratio` board with a `boundingbox` shows its whole view
-  at any width (JSXGraph's own rule keeps one side and may crop the other on
-  a narrow screen). Boards need no resize code of their own.
-- **Known limits.** The navigation bar's home button (`zoom100`) uses
-  JSXGraph's rule, so on a narrow screen it may crop a `keepaspectratio`
-  board that the resize had fitted. A `keepaspectratio` board set up with
+  at any width, also after the navigation bar's home button (JSXGraph's own
+  rule keeps one side and may crop the other on a narrow screen). Boards need
+  no resize code of their own.
+- **Known limits.** A `keepaspectratio` board set up with
   `unitX`/`unitY` and `originX`/`originY` keeps its units and origin, so a
   narrow screen cuts its right side. An assessment request with `ai.render`
   for a board that has never been shown returns an empty picture (the

@@ -693,7 +693,8 @@ board%s.reload = function() { window.location.reload(); };
   // keepaspectratio board's vertical extent and crops the sides when the
   // container gets narrower than the box. Such a board shows the whole view
   // its code, the user (zoom, pan) or initBoard set, fitted with one scale
-  // and centred, as initBoard does.
+  // and centred, as initBoard does; its home button (zoom100) shows the whole
+  // initial box the same way.
   function fit(box, width, height) {  // keeps the direction of each axis
     const dx = box[2] - box[0], dy = box[1] - box[3];
     const scale = Math.min(width / Math.abs(dx), height / Math.abs(dy));
@@ -707,7 +708,20 @@ board%s.reload = function() { window.location.reload(); };
     const proto = JXG.Board.prototype;
     let view = board.attr.boundingbox.slice();
     let shown = board.canvasWidth > 0 && board.canvasHeight > 0, last = board.getBoundingBox(), own = false;
-    board.setBoundingBox = function (box) {
+    board.setBoundingBox = function (box, keepaspectratio, setZoom) {
+      // zoom100 (the navigation bar's home button) asks for the initial box
+      // with JSXGraph's rule, which may crop it: fit it as initBoard does.
+      if (!own && keepaspectratio && setZoom === 'reset' && box === this.attr.boundingbox &&
+          this.canvasWidth > 0 && this.canvasHeight > 0) {
+        view = box.slice();
+        own = true;
+        try {
+          proto.setBoundingBox.call(this, fit(view, this.canvasWidth, this.canvasHeight), false, 'reset');
+          this.keepaspectratio = true;
+        } finally { own = false; }
+        last = this.getBoundingBox();
+        return this;
+      }
       if (!own && finite(box)) view = box.slice();
       proto.setBoundingBox.apply(this, arguments);
       if (!own) last = this.getBoundingBox();

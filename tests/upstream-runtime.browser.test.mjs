@@ -61,4 +61,28 @@ for(const name of (process.env.JXG_TEST_BROWSERS || 'chromium').split(',')) {
    assert.ok(whole(result[true]),'with the extension the whole box is shown: '+result[true]);
   }finally{await browser.close();}
  });
+ test('the home button shows the whole box of a narrowed keepaspectratio board only with the extension\'s code in '+name,{skip:!playwright && 'Playwright unavailable'},async()=>{
+  const browser=await open(name);
+  try{
+   const result={};
+   for(const wrapped of [false,true]){
+    const page=await browser.newPage();
+    await page.setContent('<div id="outer" style="width:600px"><div id="box" style="width:100%;height:150px"></div></div>');
+    await page.addScriptTag({path:fileURLToPath(new URL('resources/js/jsxgraphcore.js',root))});
+    if(wrapped)await page.addScriptTag({content:keepView});
+    await page.evaluate(()=>{window.board=JXG.JSXGraph.initBoard('box',{boundingbox:[0,6,14,0],keepaspectratio:true,axis:false,showCopyright:false,showNavigation:true,showZoom:true});});
+    await page.evaluate(()=>{document.querySelector('#outer').style.width='273px';});
+    await page.waitForFunction(()=>board.canvasWidth===273);
+    await page.waitForTimeout(100);
+    await page.evaluate(()=>{board.zoomIn();board.zoomIn();});
+    await page.click('#box_navigation_100');
+    result[wrapped]=await page.evaluate(()=>({box:board.getBoundingBox(),zoom:[board.zoomX,board.zoomY]}));
+    await page.close();
+   }
+   const whole=(box)=>box[0]<=1e-9 && box[1]>=6-1e-9 && box[2]>=14-1e-9 && box[3]<=1e-9;
+   assert.ok(!whole(result[false].box),'JSXGraph alone crops the sides: '+result[false].box);
+   assert.ok(whole(result[true].box),'with the extension the whole box is shown: '+result[true].box);
+   assert.deepEqual(result[true].zoom,[1,1]);
+  }finally{await browser.close();}
+ });
 }
