@@ -3,8 +3,8 @@
 // Renders small Quarto projects with the filter and inspects the generated
 // <iframe> (its data: URL, decoded). Needs Quarto 1.3 or later: set QUARTO to
 // the quarto executable, or have `quarto` on the PATH; without it the tests are
-// skipped. The test of unchanged output also needs the commit the feature was
-// added on top of in this git clone (`git fetch` the branch history if missing).
+// skipped. The baseline comparison also needs the reviewed release-runtime
+// commit in this git clone (`git fetch` the branch history if missing).
 // Run with `node --test tests/mathjax-preload.output.test.mjs` (or `node --test`).
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -58,7 +58,7 @@ test('an unset, empty or blank option gives the same frame as no option', { skip
 });
 
 // Needs BASE_COMMIT (see tests/support/render.mjs) in the git clone; skipped without it.
-test('unconfigured documents render byte-identically to the base commit (board ids normalised)', { skip: skip || false }, (t) => {
+test('unconfigured output differs from the release-runtime baseline only by iframe overflow CSS', { skip: skip || false }, (t) => {
   const baseRev = extensionAtRevision(BASE_COMMIT);
   if (!baseRev) { t.skip('commit ' + BASE_COMMIT + ' is not in this git clone'); return; }
   const docs = {
@@ -79,6 +79,16 @@ test('unconfigured documents render byte-identically to the base commit (board i
       assert.equal(old.status, 0, doc + ' (base): ' + old.stderr);
       assert.ok(head.frames.length >= 1, doc + ': has frames');
       assert.equal(head.frames.length, old.frames.length);
+      // Carry over upstream's scrollbar suppression, with no other renderer
+      // changes. Assert the old CSS exists before applying this exact delta.
+      const before = 'html,body{margin:0;padding:0;width:100%;height:100%;}';
+      const after = 'html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;}';
+      for (const frame of old.frames) {
+        assert.ok(frame.html.includes(before), 'baseline iframe CSS found');
+        const expected = frame.html.replace(before, after);
+        old.html = old.html.replace(Buffer.from(frame.html).toString('base64'), Buffer.from(expected).toString('base64'));
+        frame.html = expected;
+      }
       head.frames.forEach((f, i) => {
         assert.equal(Buffer.from(normalizeIds(f.html)).equals(Buffer.from(normalizeIds(old.frames[i].html))), true, doc + ' frame ' + i + ' identical');
       });

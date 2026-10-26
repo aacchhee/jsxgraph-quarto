@@ -113,7 +113,8 @@ async function defineTests() {
   }
 
   async function run(engine, name, { startupTimeout = 60000, tolerateStall = false } = {}) {
-    const browser = await playwright[engine].launch({ headless: true });
+    const browser = await playwright[engine].launch({ headless: true,
+      ...(engine === 'chromium' && process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
     const context = await browser.newContext({ viewport: { width: 900, height: 700 } });
     await context.addInitScript(installHarness);
     const page = await context.newPage();

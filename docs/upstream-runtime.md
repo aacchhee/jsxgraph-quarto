@@ -29,6 +29,15 @@ home button (`zoom100`) crops it the same way. The extension still fits such
 a board's whole view on resize and on the home button; the browser tests
 check both sides of this.
 
+The integration of upstream `main` at `a95610d` retains its `overflow:hidden`
+on the iframe's `html,body`, suppressing frame scrollbars without replacing
+the board's percentage container dimensions. Its old refresh loop is not
+restored: JSXGraph's own ResizeObserver follows the container on every resize.
+`tests/iframe-resize.browser.test.mjs` renders the actual sandboxed data iframe
+with Quarto, repeatedly narrows and widens it, hides and shows it, and checks
+canvas/SVG dimensions, percentage container styles, the whole box and home.
+The bundled core and CSS are byte-identical to upstream `main` at that commit.
+
 A truly hidden percentage-width board still has zero width until shown and
 has no drawable hidden image. View recovery and hidden-image capture are
 separate capabilities; a blank PNG must not be described as useful context.

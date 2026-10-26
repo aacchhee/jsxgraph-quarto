@@ -10,10 +10,11 @@ import { fileURLToPath } from 'node:url';
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const extensionDir = join(repoRoot, '_extensions', 'jsxgraph');
 
-// The commit this feature was added on top of; unconfigured output must not differ from it.
-// The test of unchanged output needs this commit in the git clone, so it skips (with a
-// message) after a squash or rebase of the branch, or in a shallow clone.
-export const BASE_COMMIT = '21c5f9cabcd434f2f79f93e08adaf41aafb727a8';
+// Reviewed release-runtime baseline before the upstream iframe integration.
+// Comparing to the original pre-preload commit would also compare unrelated
+// runtime and hidden-board changes. The output test allows only the explicit
+// iframe overflow CSS delta from this baseline.
+export const BASE_COMMIT = '5ab4e4186f8290bafbd2b40c056b57e8123632b0';
 
 export function findQuarto() {
   const exe = process.env.QUARTO || 'quarto';
